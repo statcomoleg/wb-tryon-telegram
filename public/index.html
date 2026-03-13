@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Нейрофотосессия WB/Ozon</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: dark light;
+        --bg: #050816;
+        --bg-soft: #0f172a;
+        --accent: #6366f1;
+        --accent-soft: rgba(99, 102, 241, 0.15);
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --error: #f97373;
+        --radius-lg: 18px;
+        --radius-md: 12px;
+        --shadow-soft: 0 18px 45px rgba(15, 23, 42, 0.55);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+        background: radial-gradient(circle at top, #1d2345 0, #020617 45%, #000 100%);
+        color: var(--text);
+      }
+
+      .app {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        padding: 16px;
+        gap: 14px;
+      }
+
+      .card {
+        background: radial-gradient(circle at top left, #111827 0, #020617 55%);
+        border-radius: var(--radius-lg);
+        padding: 16px 16px 14px;
+        box-shadow: var(--shadow-soft);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 6px;
+      }
+
+      .title {
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+
+      .subtitle {
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 2px;
+      }
+
+      .badge {
+        padding: 4px 9px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, rgba(8, 47, 73, 0.9), rgba(30, 64, 175, 0.9));
+        font-size: 11px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: #e5e7eb;
+        border: 1px solid rgba(129, 140, 248, 0.55);
+      }
+
+      .badge-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #22c55e;
+        box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.25);
+      }
+
+      .section-title {
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 6px;
+      }
+
+      .section-caption {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 10px;
+      }
+
+      label {
+        font-size: 13px;
+        display: block;
+        margin-bottom: 5px;
+        color: #e5e7eb;
+      }
+
+      textarea,
+      input[type='text'] {
+        width: 100%;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(148, 163, 184, 0.6);
+        padding: 9px 11px;
+        font-size: 13px;
+        background: rgba(15, 23, 42, 0.95);
+        color: var(--text);
+        outline: none;
+        transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+      }
+
+      textarea {
+        resize: vertical;
+        min-height: 70px;
+        max-height: 160px;
+      }
+
+      textarea:focus,
+      input[type='text']:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.65);
+        background: radial-gradient(circle at top, #020617 0, #020617 55%);
+      }
+
+      .hint {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+
+      .btn {
+        appearance: none;
+        border: none;
+        border-radius: 999px;
+        padding: 9px 16px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        color: white;
+        box-shadow: 0 12px 30px rgba(55, 48, 163, 0.75);
+        transition: transform 0.1s ease, box-shadow 0.1s ease, filter 0.1s ease;
+      }
+
+      .btn:active {
+        transform: translateY(1px) scale(0.99);
+        box-shadow: 0 8px 20px rgba(55, 48, 163, 0.6);
+        filter: brightness(0.96);
+      }
+
+      .btn-secondary {
+        background: rgba(15, 23, 42, 0.9);
+        color: var(--muted);
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        box-shadow: none;
+      }
+
+      .btn-secondary:active {
+        box-shadow: none;
+      }
+
+      .btn-full {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .row {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .row > * {
+        flex: 1;
+      }
+
+      .status {
+        font-size: 12px;
+        margin-top: 8px;
+        min-height: 14px;
+      }
+
+      .status-error {
+        color: var(--error);
+      }
+
+      .status-ok {
+        color: #4ade80;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 6px;
+      }
+
+      .chip {
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .gallery {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+        margin-top: 10px;
+      }
+
+      .gallery img {
+        width: 100%;
+        border-radius: 10px;
+        object-fit: cover;
+        aspect-ratio: 3 / 4;
+        border: 1px solid rgba(148, 163, 184, 0.5);
+      }
+
+      .sessions {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 8px;
+        max-height: 150px;
+        overflow-y: auto;
+      }
+
+      .session-item {
+        padding: 7px 9px;
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+      }
+
+      .session-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .pill {
+        padding: 2px 7px;
+        border-radius: 999px;
+        border: 1px solid rgba(129, 140, 248, 0.7);
+        font-size: 10px;
+        color: #a5b4fc;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="card">
+        <div class="header">
+          <div>
+            <div class="title">Нейрофотосессия с WB / Ozon</div>
+            <div class="subtitle">Ваша виртуальная внешность + примерка вещей</div>
+          </div>
+          <div class="badge">
+            <span class="badge-dot"></span>
+            beta • private
+          </div>
+        </div>
+        <div class="chips">
+          <div class="chip">Шаг 1 — внешность</div>
+          <div class="chip">Шаг 2 — ссылка WB / Ozon</div>
+          <div class="chip">Шаг 3 — фотосессия</div>
+        </div>
+      </div>
+
+      <div class="card" id="step-avatar">
+        <div class="section-title">1. Виртуальная внешность</div>
+        <div class="section-caption">
+          Добавьте 3–8 ваших реалистичных фото (анфас, профиль, 3/4). Можно как загрузить файлы, так
+          и вставить ссылки.
+        </div>
+        <label for="avatar-files">Фото с устройства</label>
+        <input id="avatar-files" type="file" accept="image/*" multiple />
+        <div class="hint" id="avatar-files-hint">Вы ещё не выбрали фотографии.</div>
+        <label for="avatar-urls" style="margin-top: 10px">Или ссылки на фото (каждая с новой строки)</label>
+        <textarea id="avatar-urls" placeholder="https://..."></textarea>
+        <div class="row">
+          <button class="btn btn-full" id="btn-save-avatar">
+            <span>Создать / обновить внешность</span>
+          </button>
+        </div>
+        <div class="status" id="avatar-status"></div>
+      </div>
+
+      <div class="card" id="step-product">
+        <div class="section-title">2. Ссылка на товар</div>
+        <div class="section-caption">
+          Вставьте ссылку на карточку товара Wildberries или Ozon (одежда или аксессуар).
+        </div>
+        <label for="product-url">URL карточки товара</label>
+        <input id="product-url" type="text" placeholder="https://www.wildberries.ru/..." />
+        <div class="row" style="margin-top: 10px">
+          <button class="btn btn-full" id="btn-analyze-product">
+            Проверить товар и подготовить фото
+          </button>
+        </div>
+        <div class="status" id="product-status"></div>
+      </div>
+
+      <div class="card" id="step-photoshoot">
+        <div class="section-title">3. Фотосессия и примерка</div>
+        <div class="section-caption">
+          На основе вашей внешности и фото товара будет сгенерирована фотосессия. Можно добавлять
+          новые вещи в ту же сессию.
+        </div>
+        <div class="row">
+          <button class="btn btn-full" id="btn-generate-photos">
+            Запустить фотосессию
+          </button>
+        </div>
+        <div class="status" id="photoshoot-status"></div>
+        <div class="gallery" id="photoshoot-gallery"></div>
+      </div>
+
+      <div class="card" id="step-sessions">
+        <div class="section-title">Ваши сессии</div>
+        <div class="section-caption">
+          Список недавних фотосессий. Можно открыть текущую и добавить ещё вещи.
+        </div>
+        <div class="row" style="margin-top: 6px">
+          <button class="btn btn-secondary btn-full" id="btn-refresh-sessions">
+            Обновить список сессий
+          </button>
+        </div>
+        <div class="sessions" id="sessions-list"></div>
+      </div>
+    </div>
+
+    <script>
+      const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+      if (tg) {
+        tg.expand();
+      }
+
+      const apiBase =
+        window.location.origin === 'null'
+          ? 'http://localhost:3000'
+          : window.location.origin.replace(/\/+$/, '');
+
+      function getTelegramUserId() {
+        if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+          return String(tg.initDataUnsafe.user.id);
+        }
+        return 'local-debug-user';
+      }
+
+      async function callApi(path, options) {
+        const res = await fetch(apiBase + path, {
+          method: options?.method || 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: options?.body ? JSON.stringify(options.body) : undefined
+        });
+        const text = await res.text();
+        let data;
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch (e) {
+          data = { raw: text };
+        }
+        if (!res.ok) {
+          const errMsg = data?.error || res.statusText || 'Неизвестная ошибка';
+          throw new Error(errMsg);
+        }
+        return data;
+      }
+
+      const avatarUrlsInput = document.getElementById('avatar-urls');
+      const avatarFilesInput = document.getElementById('avatar-files');
+      const avatarFilesHint = document.getElementById('avatar-files-hint');
+      const avatarStatus = document.getElementById('avatar-status');
+      const btnSaveAvatar = document.getElementById('btn-save-avatar');
+
+      const productUrlInput = document.getElementById('product-url');
+      const productStatus = document.getElementById('product-status');
+      const btnAnalyzeProduct = document.getElementById('btn-analyze-product');
+
+      const photoshootStatus = document.getElementById('photoshoot-status');
+      const photoshootGallery = document.getElementById('photoshoot-gallery');
+      const btnGeneratePhotos = document.getElementById('btn-generate-photos');
+
+      const sessionsList = document.getElementById('sessions-list');
+      const btnRefreshSessions = document.getElementById('btn-refresh-sessions');
+
+      let lastAnalysis = null;
+      let currentSessionId = null;
+
+      const uploadedAvatarDataUrls = [];
+
+      avatarFilesInput.addEventListener('change', async (event) => {
+        uploadedAvatarDataUrls.length = 0;
+        const files = Array.from(event.target.files || []).slice(0, 8);
+
+        if (!files.length) {
+          avatarFilesHint.textContent = 'Вы ещё не выбрали фотографии.';
+          return;
+        }
+
+        const readFileAsDataUrl = (file) =>
+          new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+
+        try {
+          for (const file of files) {
+            // eslint-disable-next-line no-await-in-loop
+            const dataUrl = await readFileAsDataUrl(file);
+            if (typeof dataUrl === 'string') {
+              uploadedAvatarDataUrls.push(dataUrl);
+            }
+          }
+          avatarFilesHint.textContent = `Выбрано файлов: ${uploadedAvatarDataUrls.length}`;
+        } catch (e) {
+          console.error(e);
+          avatarFilesHint.textContent = 'Не удалось прочитать файлы, попробуйте ещё раз.';
+        }
+      });
+
+      btnSaveAvatar.addEventListener('click', async () => {
+        avatarStatus.textContent = 'Создаём виртуальную внешность...';
+        avatarStatus.className = 'status';
+        try {
+          const urlsFromTextarea = avatarUrlsInput.value
+            .split('\n')
+            .map((s) => s.trim())
+            .filter(Boolean);
+          const allUrls = [...uploadedAvatarDataUrls, ...urlsFromTextarea];
+
+          if (!allUrls.length) {
+            avatarStatus.textContent = 'Добавьте хотя бы одно фото или ссылку на фото.';
+            avatarStatus.classList.add('status-error');
+            return;
+          }
+
+          const telegramUserId = getTelegramUserId();
+
+          await callApi('/api/avatar', {
+            body: {
+              telegramUserId,
+              photoUrls: allUrls
+            }
+          });
+
+          avatarStatus.textContent = 'Внешность сохранена. Можно переходить к выбору товара.';
+          avatarStatus.classList.add('status-ok');
+        } catch (err) {
+          avatarStatus.textContent = err.message || 'Не удалось создать внешность.';
+          avatarStatus.classList.add('status-error');
+        }
+      });
+
+      btnAnalyzeProduct.addEventListener('click', async () => {
+        productStatus.textContent = 'Анализируем карточку товара...';
+        productStatus.className = 'status';
+        lastAnalysis = null;
+        photoshootGallery.innerHTML = '';
+        try {
+          const url = productUrlInput.value.trim();
+          if (!url) {
+            productStatus.textContent = 'Вставьте ссылку на карточку товара.';
+            productStatus.classList.add('status-error');
+            return;
+          }
+
+          const telegramUserId = getTelegramUserId();
+          const data = await callApi('/api/product/analyze', {
+            body: {
+              telegramUserId,
+              productUrl: url
+            }
+          });
+
+          lastAnalysis = data;
+          productStatus.textContent = 'Товар выглядит как одежда/аксессуар. Можно запускать фотосессию.';
+          productStatus.classList.add('status-ok');
+        } catch (err) {
+          productStatus.textContent = err.message || 'Не удалось проанализировать товар.';
+          productStatus.classList.add('status-error');
+        }
+      });
+
+      btnGeneratePhotos.addEventListener('click', async () => {
+        photoshootStatus.textContent = 'Генерируем фотосессию...';
+        photoshootStatus.className = 'status';
+        photoshootGallery.innerHTML = '';
+        try {
+          const telegramUserId = getTelegramUserId();
+          const productUrl = productUrlInput.value.trim();
+
+          if (!productUrl) {
+            photoshootStatus.textContent = 'Сначала вставьте ссылку на карточку товара.';
+            photoshootStatus.classList.add('status-error');
+            return;
+          }
+
+          const images =
+            (lastAnalysis && lastAnalysis.images && lastAnalysis.images.length
+              ? lastAnalysis.images
+              : [productUrl]);
+
+          const data = await callApi('/api/photoshoot', {
+            body: {
+              telegramUserId,
+              sessionId: currentSessionId || undefined,
+              product: {
+                url: productUrl,
+                title: lastAnalysis?.title || null,
+                images
+              }
+            }
+          });
+
+          currentSessionId = data.sessionId;
+
+          photoshootGallery.innerHTML = '';
+          (data.images || []).forEach((src) => {
+            const img = document.createElement('img');
+            img.src = src;
+            photoshootGallery.appendChild(img);
+          });
+
+          photoshootStatus.textContent =
+            'Фотосессия готова. Можно добавить ещё вещи в эту же сессию.';
+          photoshootStatus.classList.add('status-ok');
+
+          await refreshSessions();
+        } catch (err) {
+          photoshootStatus.textContent = err.message || 'Не удалось сгенерировать фотосессию.';
+          photoshootStatus.classList.add('status-error');
+        }
+      });
+
+      async function refreshSessions() {
+        try {
+          const telegramUserId = getTelegramUserId();
+          const data = await callApi(`/api/sessions/${telegramUserId}`, {
+            method: 'GET'
+          });
+
+          sessionsList.innerHTML = '';
+
+          (data.sessions || []).forEach((session) => {
+            const root = document.createElement('div');
+            root.className = 'session-item';
+
+            const meta = document.createElement('div');
+            meta.className = 'session-meta';
+
+            const title = document.createElement('div');
+            title.textContent = `Сессия ${session.id.slice(0, 6)}…`;
+            meta.appendChild(title);
+
+            const info = document.createElement('div');
+            info.style.color = 'var(--muted)';
+            info.textContent = `${(session.products || []).length} товаров • ${
+              (session.images || []).length
+            } фото`;
+            meta.appendChild(info);
+
+            root.appendChild(meta);
+
+            const pill = document.createElement('button');
+            pill.className = 'pill';
+            pill.type = 'button';
+            pill.textContent = 'Сделать активной';
+            pill.addEventListener('click', () => {
+              currentSessionId = session.id;
+              photoshootStatus.textContent =
+                'Сессия выбрана. Новые вещи будут добавляться к этой фотосессии.';
+              photoshootStatus.className = 'status status-ok';
+            });
+
+            root.appendChild(pill);
+            sessionsList.appendChild(root);
+          });
+        } catch (err) {
+          console.error('Failed to refresh sessions', err);
+        }
+      }
+
+      btnRefreshSessions.addEventListener('click', () => {
+        refreshSessions();
+      });
+
+      refreshSessions();
+    </script>
+  </body>
+</html>
+
