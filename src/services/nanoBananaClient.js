@@ -100,12 +100,14 @@ async function waitForTaskResult(taskId, { pollIntervalMs = 3000, timeoutMs = 12
         resp?.originImageUrl ||
         resp?.imageUrl ||
         resp?.url ||
-        (Array.isArray(resp?.images) && resp.images[0]) ||
+        data?.resultImageUrl ||
+        data?.originImageUrl ||
+        (Array.isArray(resp?.images) && (resp.images[0]?.url || resp.images[0])) ||
+        (Array.isArray(data?.images) && (data.images[0]?.url || data.images[0])) ||
         (typeof resp === 'string' && resp.startsWith('http') ? resp : null);
       if (resultUrl) return [resultUrl];
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn('NanoBanana success but no image URL in response:', JSON.stringify(resp));
-      }
+      const raw = JSON.stringify(resp || data).slice(0, 500);
+      console.warn('NanoBanana: success, но URL картинки не найден. Ответ API (начало):', raw);
       throw new Error('NanoBanana API: success but no image URL in response');
     }
     if (successFlag === 2 || successFlag === 3) {
@@ -166,12 +168,11 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
   } catch (err) {
     const msg = err?.message || String(err);
     const isNoUrl = /no image URL|success but no image/i.test(msg);
-    console.error(
-      isNoUrl
-        ? 'NanoBanana API: задача успешна, но URL картинки нет в ответе — показываем фото товара.'
-        : 'NanoBanana API failed, returning product images as fallback:',
-      msg
-    );
+    if (isNoUrl) {
+      console.warn('NanoBanana: генерация успешна, но в ответе нет URL картинки — показываем фото товара.');
+      return fallbackResult('Генерация прошла, но сервис не вернул ссылку на результат. Показаны фото товара.');
+    }
+    console.error('NanoBanana API failed, returning product images as fallback:', msg);
     return fallbackResult(msg);
   }
 }
