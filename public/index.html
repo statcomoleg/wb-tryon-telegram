@@ -314,10 +314,9 @@
       <div class="card" id="step-avatar">
         <div class="section-title">1. Виртуальная внешность</div>
         <div class="section-caption">
-          Добавьте 3–8 ваших реалистичных фото (анфас, профиль, 3/4). Можно как загрузить файлы, так
-          и вставить ссылки.
+          До 3 фото с устройства (сжимаются автоматически) или ссылки на фото — чтобы избежать ошибки 413.
         </div>
-        <label for="avatar-files">Фото с устройства</label>
+        <label for="avatar-files">Фото с устройства (макс. 3)</label>
         <input id="avatar-files" type="file" accept="image/*" multiple />
         <div class="hint" id="avatar-files-hint">Вы ещё не выбрали фотографии.</div>
         <label for="avatar-urls" style="margin-top: 10px">Или ссылки на фото (каждая с новой строки)</label>
@@ -439,9 +438,15 @@
 
       const uploadedAvatarDataUrls = [];
 
-      /** Сжатие изображения для уменьшения размера запроса (избегаем 413). */
-      function compressImageDataUrl(dataUrl, maxSize = 1024, quality = 0.82) {
-        return new Promise((resolve, reject) => {
+      /** Сильное сжатие: один запрос — одно фото, чтобы обойти 413 на Render. */
+      const AVATAR_MAX_PX = 400;
+      const AVATAR_JPEG_QUALITY = 0.5;
+      const AVATAR_MAX_FILES = 3;
+
+      function compressImageDataUrl(dataUrl, maxSize, quality) {
+        maxSize = maxSize ?? AVATAR_MAX_PX;
+        quality = quality ?? AVATAR_JPEG_QUALITY;
+        return new Promise((resolve) => {
           const img = new Image();
           img.crossOrigin = 'anonymous';
           img.onload = function () {
@@ -462,8 +467,7 @@
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, w, h);
             try {
-              const out = canvas.toDataURL('image/jpeg', quality);
-              resolve(out);
+              resolve(canvas.toDataURL('image/jpeg', quality));
             } catch (e) {
               resolve(dataUrl);
             }
@@ -475,7 +479,7 @@
 
       avatarFilesInput.addEventListener('change', async (event) => {
         uploadedAvatarDataUrls.length = 0;
-        const files = Array.from(event.target.files || []).slice(0, 8);
+        const files = Array.from(event.target.files || []).slice(0, AVATAR_MAX_FILES);
 
         if (!files.length) {
           avatarFilesHint.textContent = 'Вы ещё не выбрали фотографии.';
@@ -499,7 +503,7 @@
               uploadedAvatarDataUrls.push(compressed);
             }
           }
-          avatarFilesHint.textContent = `Выбрано файлов: ${uploadedAvatarDataUrls.length} (сжаты для загрузки)`;
+          avatarFilesHint.textContent = `Выбрано файлов: ${uploadedAvatarDataUrls.length} (макс. ${AVATAR_MAX_FILES}, сжаты до ${AVATAR_MAX_PX}px)`;
         } catch (e) {
           console.error(e);
           avatarFilesHint.textContent = 'Не удалось прочитать файлы, попробуйте ещё раз.';
@@ -513,10 +517,12 @@
           const urlsFromTextarea = avatarUrlsInput.value
             .split('\n')
             .map((s) => s.trim())
-            .filter(Boolean);
-          const allUrls = [...uploadedAvatarDataUrls, ...urlsFromTextarea];
+            .filter(Boolean)
+            .slice(0, 3);
+          const hasFiles = uploadedAvatarDataUrls.length > 0;
+          const hasUrls = urlsFromTextarea.length > 0;
 
-          if (!allUrls.length) {
+          if (!hasFiles && !hasUrls) {
             avatarStatus.textContent = 'Добавьте хотя бы одно фото или ссылку на фото.';
             avatarStatus.classList.add('status-error');
             return;
@@ -524,12 +530,18 @@
 
           const telegramUserId = getTelegramUserId();
 
-          await callApi('/api/avatar', {
-            body: {
-              telegramUserId,
-              photoUrls: allUrls
-            }
-          });
+          await callApi('/api/avatar/clear', { body: { telegramUserId } });
+
+          for (const dataUrl of uploadedAvatarDataUrls) {
+            await callApi('/api/avatar/upload', {
+              body: { telegramUserId, photoDataUrl: dataUrl }
+            });
+          }
+          for (const url of urlsFromTextarea) {
+            await callApi('/api/avatar/upload', {
+              body: { telegramUserId, photoDataUrl: url }
+            });
+          }
 
           avatarStatus.textContent = 'Внешность сохранена. Можно переходить к выбору товара.';
           avatarStatus.classList.add('status-ok');

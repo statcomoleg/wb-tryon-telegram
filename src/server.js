@@ -49,7 +49,44 @@ app.get('/api/test-nano-banana', async (req, res) => {
 });
 
 /**
- * API: create / update user appearance profile
+ * API: clear appearance (before uploading one-by-one to avoid 413)
+ * Body: { telegramUserId: string }
+ */
+app.post('/api/avatar/clear', (req, res) => {
+  try {
+    const { telegramUserId } = req.body || {};
+    if (!telegramUserId) {
+      return res.status(400).json({ error: 'telegramUserId required' });
+    }
+    sessionStore.clearAppearance(telegramUserId);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Error in /api/avatar/clear:', err);
+    return res.status(500).json({ error: 'Failed to clear avatar' });
+  }
+});
+
+/**
+ * API: upload one photo for appearance (small request to avoid 413)
+ * Body: { telegramUserId: string, photoDataUrl: string }
+ */
+app.post('/api/avatar/upload', async (req, res) => {
+  try {
+    const { telegramUserId, photoDataUrl } = req.body || {};
+    if (!telegramUserId || !photoDataUrl || typeof photoDataUrl !== 'string') {
+      return res.status(400).json({ error: 'telegramUserId and photoDataUrl required' });
+    }
+    const appended = sessionStore.appendAppearancePhoto(telegramUserId, photoDataUrl);
+    const appearance = sessionStore.getAppearance(telegramUserId);
+    return res.json({ ok: true, appended, appearance });
+  } catch (err) {
+    console.error('Error in /api/avatar/upload:', err);
+    return res.status(500).json({ error: 'Failed to upload photo' });
+  }
+});
+
+/**
+ * API: create / update user appearance profile (full list — for URL-only or small payloads)
  * Body: { telegramUserId: string, photoUrls: string[] }
  */
 app.post('/api/avatar', async (req, res) => {
@@ -60,13 +97,11 @@ app.post('/api/avatar', async (req, res) => {
       return res.status(400).json({ error: 'telegramUserId and photoUrls[] are required' });
     }
 
-    // Call Nano Banana Pro (placeholder client) to create / update appearance
     const appearance = await nanoBananaClient.createOrUpdateAppearance({
       userId: telegramUserId,
       photoUrls
     });
 
-    // Save to in-memory store (prototype; replace with DB in production)
     sessionStore.setAppearance(telegramUserId, appearance);
 
     return res.json({ appearance });
