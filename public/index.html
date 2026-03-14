@@ -803,7 +803,11 @@
               'Фотосессия готова (сгенерировано нейросетью). Можно добавить ещё вещи в эту же сессию.';
             photoshootStatus.classList.add('status-ok');
           } else if (data.error) {
-            photoshootStatus.textContent = data.error;
+            let errText = data.error;
+            if (/Generation failed|generation failed/i.test(errText)) {
+              errText += ' Попробуйте другие фото внешности или ссылку на товар.';
+            }
+            photoshootStatus.textContent = errText;
             photoshootStatus.classList.add('status-error');
           } else if (data.images && data.images.length) {
             photoshootStatus.textContent =

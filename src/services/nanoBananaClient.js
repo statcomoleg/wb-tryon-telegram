@@ -99,7 +99,16 @@ async function waitForTaskResult(taskId, { pollIntervalMs = 3000, timeoutMs = 12
       throw new Error('NanoBanana API: success but no image URL in response');
     }
     if (successFlag === 2 || successFlag === 3) {
-      const msg = data?.errorMessage || data?.errorCode || 'Generation failed';
+      const msg =
+        data?.errorMessage ||
+        data?.message ||
+        res?.msg ||
+        (typeof data?.errorCode === 'string' ? data.errorCode : null) ||
+        (typeof data?.errorCode === 'number' ? `Error code: ${data.errorCode}` : null) ||
+        'Generation failed';
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('NanoBanana task failed:', JSON.stringify({ successFlag, data: data || {}, res: res?.msg }));
+      }
       throw new Error(`NanoBanana API: ${msg}`);
     }
 
