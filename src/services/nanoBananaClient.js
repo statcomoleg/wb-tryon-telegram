@@ -133,7 +133,26 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
 }
 
 /**
- * Тест: одна простая генерация без референсов.
+ * Быстрая проверка: запрос баланса (GET /api/v1/common/credit).
+ * Ответ за 1–2 сек, без генерации — страница не «висит».
+ */
+async function getCredits() {
+  const url = `${NANO_BANANA_BASE_URL}/api/v1/common/credit`;
+  const response = await axios.get(url, {
+    headers: getAuthHeaders(),
+    timeout: 10000
+  });
+  const res = response.data;
+  if (res && res.code !== 200) {
+    const e = new Error(res.msg || res.message || 'API error');
+    e.code = res.code;
+    throw e;
+  }
+  return res?.data ?? 0;
+}
+
+/**
+ * Тест API: только проверка ключа и баланса (без генерации), ответ сразу.
  */
 async function testGeneration() {
   if (!NANO_BANANA_API_KEY) {
@@ -146,26 +165,36 @@ async function testGeneration() {
     return { success: false, error: 'NANO_BANANA_API_KEY слишком короткий — вставьте ключ целиком.' };
   }
   try {
-    const taskId = await createGenerationTask({
-      prompt: 'A single red apple on a white background, photorealistic.',
-      referenceImages: []
-    });
-    const images = await waitForTaskResult(taskId, { pollIntervalMs: 3000, timeoutMs: 60000 });
+    const credits = await getCredits();
     return {
       success: true,
-      image: images[0],
-      message: 'NanoBanana API отвечает, генерация работает.',
+      credits,
+      message: `Ключ принят. Баланс: ${credits} кредитов. Генерация доступна.`,
       baseUrl: NANO_BANANA_BASE_URL
     };
   } catch (err) {
-    const msg = err?.message || String(err);
-    const is401 = err?.response?.status === 401;
+    const code = err?.code ?? err?.response?.data?.code ?? err?.response?.status;
+    const msg = err?.response?.data?.msg || err?.message || String(err);
+    if (code === 401) {
+      return {
+        success: false,
+        error: msg,
+        message: '401: неверный ключ. Проверьте NANO_BANANA_API_KEY на https://nanobananaapi.ai/api-key',
+        baseUrl: NANO_BANANA_BASE_URL
+      };
+    }
+    if (code === 402) {
+      return {
+        success: false,
+        error: msg,
+        message: '402: недостаточно кредитов. Пополните баланс на nanobananaapi.ai',
+        baseUrl: NANO_BANANA_BASE_URL
+      };
+    }
     return {
       success: false,
       error: msg,
-      message: is401
-        ? '401 Unauthorized: проверьте ключ на https://nanobananaapi.ai/api-key и переменную NANO_BANANA_API_KEY в Render.'
-        : 'NanoBanana API не ответил. Проверьте ключ, квоты и логи.',
+      message: 'NanoBanana API не ответил. Проверьте ключ и сеть.',
       baseUrl: NANO_BANANA_BASE_URL
     };
   }
