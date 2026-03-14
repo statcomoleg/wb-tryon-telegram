@@ -13,12 +13,8 @@ async function analyzeProductUrl(productUrl) {
 
   const isSupportedMarketplace = supportedHosts.includes(host);
 
-  // ВРЕМЕННО: любую карточку WB/Ozon считаем тем, что можно примерить
+  // Любую карточку WB/Ozon считаем тем, что можно примерить
   const isWearable = isSupportedMarketplace;
-
- 
-  // For MVP: if marketplace is supported but we didn't detect keywords, still mark as not wearable.
-  const isWearable = isSupportedMarketplace && pathMatchesWearable;
 
   if (!isSupportedMarketplace) {
     return {
