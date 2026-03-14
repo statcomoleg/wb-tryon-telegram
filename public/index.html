@@ -602,13 +602,16 @@
             photoshootStatus.textContent =
               'Фотосессия готова (сгенерировано нейросетью). Можно добавить ещё вещи в эту же сессию.';
             photoshootStatus.classList.add('status-ok');
+          } else if (data.error) {
+            photoshootStatus.textContent = data.error;
+            photoshootStatus.classList.add('status-error');
           } else if (data.images && data.images.length) {
             photoshootStatus.textContent =
-              'Показаны фото товара. Генератор не ответил — проверьте ключ Nano Banana Pro. Тест: в браузере откройте ваш-сайт/api/test-nano-banana';
+              'Показаны фото товара. Генератор не ответил. Тест: откройте в браузере ваш-сайт/api/test-nano-banana';
             photoshootStatus.classList.add('status-error');
           } else {
             photoshootStatus.textContent =
-              'Фотосессия создана. Для генерации с примеркой нужен рабочий ключ Nano Banana Pro. Проверьте: ваш-сайт/api/test-nano-banana';
+              'Фотосессия создана. Для генерации нужен рабочий ключ Nano Banana Pro. Тест: ваш-сайт/api/test-nano-banana';
             photoshootStatus.classList.add('status-error');
           }
 

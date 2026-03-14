@@ -99,15 +99,16 @@ async function waitForTaskResult(taskId, { pollIntervalMs = 3000, timeoutMs = 12
  * Референсы: сначала фото человека, потом 1–2 фото товара (до 8 всего).
  */
 async function generatePhotoshoot({ appearance, productImages, sessionId }) {
-  const fallbackResult = () => ({
+  const fallbackResult = (errorMessage) => ({
     sessionId,
     images: Array.isArray(productImages) ? productImages : [productImages].filter(Boolean),
-    generated: false
+    generated: false,
+    error: errorMessage || null
   });
 
   if (!NANO_BANANA_API_KEY) {
     console.warn('NANO_BANANA_API_KEY is not set. Returning mocked photoshoot.');
-    return fallbackResult();
+    return fallbackResult('Ключ API не задан.');
   }
 
   const personRefs = appearance?.referenceImages || [];
@@ -127,8 +128,9 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
     });
     return { sessionId, images, generated: true };
   } catch (err) {
-    console.error('NanoBanana API failed, returning product images as fallback:', err?.message);
-    return fallbackResult();
+    const msg = err?.message || String(err);
+    console.error('NanoBanana API failed, returning product images as fallback:', msg);
+    return fallbackResult(msg);
   }
 }
 

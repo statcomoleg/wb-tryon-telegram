@@ -151,7 +151,8 @@ app.post('/api/photoshoot', async (req, res) => {
     return res.json({
       sessionId: session.id,
       images: generated.images,
-      generated: generated.generated === true
+      generated: generated.generated === true,
+      error: generated.error || null
     });
   } catch (err) {
     console.error('Error in /api/photoshoot:', err);
