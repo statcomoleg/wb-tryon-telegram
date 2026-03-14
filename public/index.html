@@ -232,6 +232,29 @@
         border: 1px solid rgba(148, 163, 184, 0.5);
       }
 
+      .gallery-link-card {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        min-height: 100px;
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        background: rgba(15, 23, 42, 0.9);
+        color: #a5b4fc;
+        font-size: 12px;
+        text-align: center;
+        text-decoration: none;
+        aspect-ratio: 3 / 4;
+        box-sizing: border-box;
+      }
+
+      .gallery-link-card:hover {
+        background: rgba(30, 41, 59, 0.95);
+        color: #c7d2fe;
+      }
+
       .sessions {
         display: flex;
         flex-direction: column;
@@ -542,14 +565,42 @@
           currentSessionId = data.sessionId;
 
           photoshootGallery.innerHTML = '';
+          const isImageUrl = (url) => {
+            if (!url || typeof url !== 'string') return false;
+            const u = url.toLowerCase();
+            return /\.(jpe?g|png|webp|gif)(\?|$)/i.test(u) || u.includes('/images/') || u.startsWith('data:image/');
+          };
           (data.images || []).forEach((src) => {
-            const img = document.createElement('img');
-            img.src = src;
-            photoshootGallery.appendChild(img);
+            if (isImageUrl(src)) {
+              const img = document.createElement('img');
+              img.src = src;
+              img.alt = 'Фото';
+              img.onerror = () => {
+                img.style.display = 'none';
+                const card = document.createElement('a');
+                card.href = src;
+                card.target = '_blank';
+                card.rel = 'noopener';
+                card.className = 'gallery-link-card';
+                card.textContent = 'Открыть товар';
+                img.parentNode.appendChild(card);
+              };
+              photoshootGallery.appendChild(img);
+            } else {
+              const card = document.createElement('a');
+              card.href = src;
+              card.target = '_blank';
+              card.rel = 'noopener';
+              card.className = 'gallery-link-card';
+              card.textContent = 'Ссылка на товар';
+              photoshootGallery.appendChild(card);
+            }
           });
 
           photoshootStatus.textContent =
-            'Фотосессия готова. Можно добавить ещё вещи в эту же сессию.';
+            data.images && data.images.length
+              ? 'Фотосессия готова. Можно добавить ещё вещи в эту же сессию.'
+              : 'Фотосессия создана. Для картинок с примеркой нужен ключ Nano Banana Pro API.';
           photoshootStatus.classList.add('status-ok');
 
           await refreshSessions();
