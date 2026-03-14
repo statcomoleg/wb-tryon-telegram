@@ -31,6 +31,23 @@ app.get('/health', (req, res) => {
 });
 
 /**
+ * Тест Nano Banana Pro: один запрос на генерацию (яблоко на белом фоне).
+ * Откройте в браузере: https://ваш-сервис.onrender.com/api/test-nano-banana
+ * Если success: true — генератор работает. Если success: false — смотрите error.
+ */
+app.get('/api/test-nano-banana', async (req, res) => {
+  try {
+    const result = await nanoBananaClient.testGeneration();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err && err.message ? err.message : String(err)
+    });
+  }
+});
+
+/**
  * API: create / update user appearance profile
  * Body: { telegramUserId: string, photoUrls: string[] }
  */
@@ -133,7 +150,8 @@ app.post('/api/photoshoot', async (req, res) => {
 
     return res.json({
       sessionId: session.id,
-      images: generated.images
+      images: generated.images,
+      generated: generated.generated === true
     });
   } catch (err) {
     console.error('Error in /api/photoshoot:', err);

@@ -30,16 +30,20 @@ async function createOrUpdateAppearance({ userId, photoUrls }) {
 /**
  * Вспомогательная функция: создать задачу генерации в Nano Banana Pro.
  * Возвращает task_id.
+ * num_images: запросить 1 картинку (коллаж) или несколько.
  */
-async function createGenerationTask({ prompt, referenceImages }) {
+async function createGenerationTask({ prompt, referenceImages, numImages = 1 }) {
+  const body = {
+    model: NANO_BANANA_MODEL_ID,
+    prompt,
+    images: Array.isArray(referenceImages) ? referenceImages.slice(0, 4) : undefined
+  };
+  if (numImages >= 1 && numImages <= 8) {
+    body.n = numImages;
+  }
   const response = await axios.post(
     `${NANO_BANANA_BASE_URL}/api/image/gen`,
-    {
-      model: NANO_BANANA_MODEL_ID,
-      prompt,
-      // API поддерживает до 4 reference images; ограничим массив.
-      images: Array.isArray(referenceImages) ? referenceImages.slice(0, 4) : undefined
-    },
+    body,
     {
       headers: {
         'Content-Type': 'application/json',
@@ -118,16 +122,15 @@ async function waitForTaskResult(taskId, { pollIntervalMs = 2000, timeoutMs = 60
 }
 
 /**
- * Генерация фотосессии:
- * - берём референс‑фото пользователя (appearance.referenceImages)
- * - добавляем 1–2 фото товара как дополнительные подсказки
- * - формируем промпт под примерку одежды
- * - запускаем задачу и ждём результат.
+ * Генерация одного коллажа: человек с референс‑фото в одежде с фото товара.
+ * Референсы: сначала фото человека (внешность), потом 1–2 фото товара (одежда).
+ * Запрашиваем 1 изображение — один коллаж.
  */
 async function generatePhotoshoot({ appearance, productImages, sessionId }) {
   const fallbackResult = () => ({
     sessionId,
-    images: Array.isArray(productImages) ? productImages : [productImages].filter(Boolean)
+    images: Array.isArray(productImages) ? productImages : [productImages].filter(Boolean),
+    generated: false
   });
 
   if (!NANO_BANANA_API_KEY) {
@@ -135,32 +138,68 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
     return fallbackResult();
   }
 
-  const referenceImages = [
-    ...(appearance?.referenceImages || []),
-    ...(Array.isArray(productImages) ? productImages.slice(0, 2) : [])
-  ];
+  const personRefs = appearance?.referenceImages || [];
+  const productRefs = Array.isArray(productImages) ? productImages.slice(0, 2) : [];
+  const referenceImages = [...personRefs, ...productRefs].slice(0, 4);
 
   const prompt =
-    'High‑quality fashion photoshoot of this person wearing the provided clothing items. ' +
-    'Realistic lighting, accurate body proportions, natural skin tones, no distortions, ' +
-    'several angles (front, 3/4, side), clean background suitable for e‑commerce.';
+    'Single image only. This exact person from the first reference photos wearing the clothing from the last reference images. ' +
+    'One photorealistic collage: same face and body as in references, wearing the garment, neutral clean background, fashion try-on. ' +
+    'Output exactly one image, no multiple panels.';
 
   try {
-    const taskId = await createGenerationTask({ prompt, referenceImages });
+    const taskId = await createGenerationTask({
+      prompt,
+      referenceImages,
+      numImages: 1
+    });
     const images = await waitForTaskResult(taskId, {
       pollIntervalMs: 2500,
       timeoutMs: 90000
     });
-    return { sessionId, images };
+    return { sessionId, images, generated: true };
   } catch (err) {
     console.error('Nano Banana Pro API failed, returning product images as fallback:', err && err.message);
     return fallbackResult();
   }
 }
 
+/**
+ * Тест подключения к Nano Banana Pro: одна простая генерация без референсов.
+ * Возвращает { success: true, image } или { success: false, error }.
+ */
+async function testGeneration() {
+  if (!NANO_BANANA_API_KEY) {
+    return { success: false, error: 'NANO_BANANA_API_KEY не задан в настройках сервера.' };
+  }
+  try {
+    const taskId = await createGenerationTask({
+      prompt: 'A single red apple on a white background, photorealistic.',
+      referenceImages: [],
+      numImages: 1
+    });
+    const images = await waitForTaskResult(taskId, {
+      pollIntervalMs: 2000,
+      timeoutMs: 60000
+    });
+    return {
+      success: true,
+      image: images[0],
+      message: 'Nano Banana Pro отвечает, генерация работает.'
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err && err.message ? err.message : String(err),
+      message: 'Nano Banana Pro не ответил. Проверьте ключ, URL и квоты.'
+    };
+  }
+}
+
 const nanoBananaClient = {
   createOrUpdateAppearance,
-  generatePhotoshoot
+  generatePhotoshoot,
+  testGeneration
 };
 
 module.exports = {
