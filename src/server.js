@@ -31,6 +31,17 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Telegram webhook (чтобы не было 409: только один приём обновлений вместо polling)
+app.post('/telegram-webhook', (req, res) => {
+  res.status(200).send();
+  try {
+    const { processUpdate } = require('./telegramBot');
+    if (processUpdate && req.body) processUpdate(req.body);
+  } catch (err) {
+    console.error('Telegram webhook process error:', err && err.message);
+  }
+});
+
 /**
  * Тест Nano Banana Pro: один запрос на генерацию (яблоко на белом фоне).
  * Откройте в браузере: https://ваш-сервис.onrender.com/api/test-nano-banana

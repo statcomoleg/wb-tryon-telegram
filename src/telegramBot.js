@@ -2,6 +2,7 @@ const TelegramBot = require('node-telegram-bot-api');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://example.com/webapp';
+const USE_WEBHOOK = process.env.TELEGRAM_USE_WEBHOOK === 'true';
 
 let botInstance = null;
 
@@ -12,7 +13,7 @@ function initBot() {
   }
 
   try {
-    const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+    const bot = new TelegramBot(BOT_TOKEN, { polling: !USE_WEBHOOK });
     botInstance = bot;
   } catch (err) {
     console.error('Telegram bot failed to start:', err && err.message);
@@ -51,11 +52,30 @@ function initBot() {
     }
   });
 
-  console.log('Telegram bot started with long polling.');
+  if (USE_WEBHOOK) {
+    const baseUrl = (WEBAPP_URL || '').replace(/\/webapp\/?$/, '').replace(/\/+$/, '');
+    const webhookUrl = baseUrl ? `${baseUrl}/telegram-webhook` : null;
+    if (webhookUrl) {
+      bot.setWebHook(webhookUrl).then(() => {
+        console.log('Telegram bot webhook set:', webhookUrl);
+      }).catch((err) => {
+        console.error('Telegram setWebHook failed:', err && err.message);
+      });
+    } else {
+      console.warn('TELEGRAM_USE_WEBHOOK=true but WEBAPP_URL has no base (e.g. https://xxx.onrender.com/webapp).');
+    }
+  } else {
+    console.log('Telegram bot started with long polling.');
+  }
+}
+
+function processUpdate(update) {
+  if (botInstance) botInstance.processUpdate(update);
 }
 
 module.exports = {
   initBot,
-  getBot: () => botInstance
+  getBot: () => botInstance,
+  processUpdate
 };
 
