@@ -506,6 +506,17 @@
       const productStatus = document.getElementById('product-status');
       const btnAnalyzeProduct = document.getElementById('btn-analyze-product');
 
+      /** Из вставленного текста (название + ссылка с «Поделиться» WB/Ozon) оставить только URL карточки. */
+      function extractProductUrl(text) {
+        if (!text || typeof text !== 'string') return '';
+        const s = text.trim();
+        const wb = s.match(/https?:\/\/(?:www\.)?(?:wildberries\.ru\/catalog\/\d+[^\s]*)/i);
+        if (wb) return wb[0].replace(/[\s,]+$/, '');
+        const ozon = s.match(/https?:\/\/(?:www\.)?(?:ozon\.ru\/product\/[^\s/]+[^\s]*)/i);
+        if (ozon) return ozon[0].replace(/[\s,]+$/, '');
+        return '';
+      }
+
       const photoshootStatus = document.getElementById('photoshoot-status');
       const photoshootGallery = document.getElementById('photoshoot-gallery');
       const btnGeneratePhotos = document.getElementById('btn-generate-photos');
@@ -688,12 +699,14 @@
         lastAnalysis = null;
         photoshootGallery.innerHTML = '';
         try {
-          const url = productUrlInput.value.trim();
+          const raw = productUrlInput.value.trim();
+          const url = extractProductUrl(raw) || raw;
           if (!url) {
-            productStatus.textContent = 'Вставьте ссылку на карточку товара.';
+            productStatus.textContent = 'Вставьте ссылку на карточку товара WB или Ozon.';
             productStatus.classList.add('status-error');
             return;
           }
+          if (url !== raw) productUrlInput.value = url;
 
           const telegramUserId = getTelegramUserId();
           const data = await callApi('/api/product/analyze', {
@@ -718,13 +731,15 @@
         photoshootGallery.innerHTML = '';
         try {
           const telegramUserId = getTelegramUserId();
-          const productUrl = productUrlInput.value.trim();
+          const raw = productUrlInput.value.trim();
+          const productUrl = extractProductUrl(raw) || raw;
 
           if (!productUrl) {
             photoshootStatus.textContent = 'Сначала вставьте ссылку на карточку товара.';
             photoshootStatus.classList.add('status-error');
             return;
           }
+          if (productUrl !== raw) productUrlInput.value = productUrl;
 
           const images =
             (lastAnalysis && lastAnalysis.images && lastAnalysis.images.length

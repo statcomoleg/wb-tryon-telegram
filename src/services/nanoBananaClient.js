@@ -4,14 +4,16 @@ const axios = require('axios');
 const NANO_BANANA_API_KEY = (process.env.NANO_BANANA_API_KEY || '').trim();
 const NANO_BANANA_BASE_URL = (process.env.NANO_BANANA_BASE_URL || 'https://api.nanobananaapi.ai').replace(/\/+$/, '');
 
-// Базовый промпт для примерки: откуда брать человека, откуда — одежду.
+// Базовый промпт для примерки: локация ПРИМЕРЯЙКА, ракурсы, стиль, откуда брать человека и одежду.
 // Можно переопределить через NANO_BANANA_PROMPT в Environment (Render).
-// Плейсхолдеры: {personCount} — число фото человека, {productCount} — число фото товара.
+// Плейсхолдеры: {personCount}, {productCount}.
 const DEFAULT_TRYON_PROMPT =
   'IMPORTANT — image order: The FIRST {personCount} images are the PERSON. Use ONLY this person\'s face and body. ' +
-  'The LAST {productCount} images are the GARMENT/product. Put this clothing ON that person. ' +
-  'Do NOT use the face or body from the product images. ' +
-  'Output: one natural, photorealistic 16:9 collage showing the same person (from the first images) wearing the garment (from the last images) from different angles and perspectives; clean neutral background, fashion try-on. Single image only, 16:9 aspect ratio.';
+  'The LAST {productCount} images are the GARMENT/product. Put this clothing ON that person. Do NOT use the face or body from the product images. ' +
+  'Location and set: Fitting room with a mirror where the person is taking photos (in the mirror). Fitting room colors black and lime green. On the backdrop there is the text ПРИМЕРЯЙКА. ' +
+  'Include all angles in one 16:9 collage: front view, back view, side view (as if shot with back camera in the mirror), and a selfie close-up with face (as if front camera). ' +
+  'Style: RAW photo look, subtle HDR effect typical of modern smartphones, slight dust particles visible on the image, soft natural light. ' +
+  'Output: one natural, photorealistic 16:9 collage, same person from the first images wearing the garment from the last images. Single image only, 16:9 aspect ratio.';
 const NANO_BANANA_PROMPT = (process.env.NANO_BANANA_PROMPT || '').trim() || null;
 
 function getAuthHeaders() {
