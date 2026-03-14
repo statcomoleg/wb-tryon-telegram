@@ -3,7 +3,6 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const bodyParser = require('body-parser');
 
 const { initBot } = require('./telegramBot');
 const { nanoBananaClient } = require('./services/nanoBananaClient');
@@ -12,10 +11,10 @@ const { sessionStore } = require('./services/sessionStore');
 
 const app = express();
 
-// Basic middleware
+// Basic middleware (express 4.16+ has json/urlencoded built-in)
 app.use(cors());
-app.use(bodyParser.json({ limit: '10mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Static frontend for Telegram WebApp
 app.use('/webapp', express.static(path.join(__dirname, '..', 'public')));
