@@ -18,9 +18,10 @@ const { sessionStore } = require('./services/sessionStore');
 const app = express();
 
 // Basic middleware (express 4.16+ has json/urlencoded built-in)
+// Лимит 50mb — загрузка нескольких фото в base64 (413 Payload Too Large)
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Static frontend for Telegram WebApp
 app.use('/webapp', express.static(path.join(__dirname, '..', 'public')));

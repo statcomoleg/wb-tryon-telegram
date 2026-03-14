@@ -408,7 +408,10 @@
           data = { raw: text };
         }
         if (!res.ok) {
-          const errMsg = data?.error || res.statusText || 'Неизвестная ошибка';
+          let errMsg = data?.error || res.statusText || 'Неизвестная ошибка';
+          if (res.status === 413) {
+            errMsg = 'Слишком большой запрос (413). Уменьшите количество или размер фото и попробуйте снова.';
+          }
           throw new Error(errMsg);
         }
         return data;
@@ -436,6 +439,40 @@
 
       const uploadedAvatarDataUrls = [];
 
+      /** Сжатие изображения для уменьшения размера запроса (избегаем 413). */
+      function compressImageDataUrl(dataUrl, maxSize = 1024, quality = 0.82) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = function () {
+            let w = img.width;
+            let h = img.height;
+            if (w > maxSize || h > maxSize) {
+              if (w > h) {
+                h = Math.round((h * maxSize) / w);
+                w = maxSize;
+              } else {
+                w = Math.round((w * maxSize) / h);
+                h = maxSize;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            try {
+              const out = canvas.toDataURL('image/jpeg', quality);
+              resolve(out);
+            } catch (e) {
+              resolve(dataUrl);
+            }
+          };
+          img.onerror = () => resolve(dataUrl);
+          img.src = dataUrl;
+        });
+      }
+
       avatarFilesInput.addEventListener('change', async (event) => {
         uploadedAvatarDataUrls.length = 0;
         const files = Array.from(event.target.files || []).slice(0, 8);
@@ -454,14 +491,15 @@
           });
 
         try {
+          avatarFilesHint.textContent = 'Обработка...';
           for (const file of files) {
-            // eslint-disable-next-line no-await-in-loop
             const dataUrl = await readFileAsDataUrl(file);
             if (typeof dataUrl === 'string') {
-              uploadedAvatarDataUrls.push(dataUrl);
+              const compressed = await compressImageDataUrl(dataUrl);
+              uploadedAvatarDataUrls.push(compressed);
             }
           }
-          avatarFilesHint.textContent = `Выбрано файлов: ${uploadedAvatarDataUrls.length}`;
+          avatarFilesHint.textContent = `Выбрано файлов: ${uploadedAvatarDataUrls.length} (сжаты для загрузки)`;
         } catch (e) {
           console.error(e);
           avatarFilesHint.textContent = 'Не удалось прочитать файлы, попробуйте ещё раз.';
