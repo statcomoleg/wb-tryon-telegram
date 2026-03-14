@@ -125,12 +125,14 @@ async function waitForTaskResult(taskId, { pollIntervalMs = 2000, timeoutMs = 60
  * - запускаем задачу и ждём результат.
  */
 async function generatePhotoshoot({ appearance, productImages, sessionId }) {
+  const fallbackResult = () => ({
+    sessionId,
+    images: Array.isArray(productImages) ? productImages : [productImages].filter(Boolean)
+  });
+
   if (!NANO_BANANA_API_KEY) {
     console.warn('NANO_BANANA_API_KEY is not set. Returning mocked photoshoot.');
-    return {
-      sessionId,
-      images: productImages
-    };
+    return fallbackResult();
   }
 
   const referenceImages = [
@@ -143,16 +145,17 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
     'Realistic lighting, accurate body proportions, natural skin tones, no distortions, ' +
     'several angles (front, 3/4, side), clean background suitable for e‑commerce.';
 
-  const taskId = await createGenerationTask({ prompt, referenceImages });
-  const images = await waitForTaskResult(taskId, {
-    pollIntervalMs: 2500,
-    timeoutMs: 90000
-  });
-
-  return {
-    sessionId,
-    images
-  };
+  try {
+    const taskId = await createGenerationTask({ prompt, referenceImages });
+    const images = await waitForTaskResult(taskId, {
+      pollIntervalMs: 2500,
+      timeoutMs: 90000
+    });
+    return { sessionId, images };
+  } catch (err) {
+    console.error('Nano Banana Pro API failed, returning product images as fallback:', err && err.message);
+    return fallbackResult();
+  }
 }
 
 const nanoBananaClient = {

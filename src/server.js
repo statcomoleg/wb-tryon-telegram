@@ -137,7 +137,8 @@ app.post('/api/photoshoot', async (req, res) => {
     });
   } catch (err) {
     console.error('Error in /api/photoshoot:', err);
-    return res.status(500).json({ error: 'Failed to generate photoshoot' });
+    const message = err && err.message ? err.message : 'Failed to generate photoshoot';
+    return res.status(500).json({ error: message });
   }
 });
 
