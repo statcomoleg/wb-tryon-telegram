@@ -93,6 +93,12 @@ async function waitForTaskResult(taskId, { pollIntervalMs = 3000, timeoutMs = 12
     const data = res?.data ?? res;
     const successFlag = data?.successFlag ?? -1;
 
+    if (successFlag !== 0 && successFlag !== -1) {
+      try {
+        console.log('[NanoBanana] record-info завершён successFlag=' + successFlag + ' body=' + JSON.stringify(data).slice(0, 600));
+      } catch (_) {}
+    }
+
     if (successFlag === 1) {
       const resp = data?.response || data;
       const resultUrl =
@@ -106,8 +112,14 @@ async function waitForTaskResult(taskId, { pollIntervalMs = 3000, timeoutMs = 12
         (Array.isArray(data?.images) && (data.images[0]?.url || data.images[0])) ||
         (typeof resp === 'string' && resp.startsWith('http') ? resp : null);
       if (resultUrl) return [resultUrl];
-      const raw = JSON.stringify(resp || data).slice(0, 500);
-      console.warn('NanoBanana: success, но URL картинки не найден. Ответ API (начало):', raw);
+      let raw;
+      try {
+        raw = JSON.stringify({ data, response: resp }).slice(0, 800);
+      } catch (e) {
+        raw = String(resp).slice(0, 200);
+      }
+      console.error('[NanoBanana] ОТВЕТ API (success, URL не найден): ' + raw);
+      console.log('[NanoBanana] ОТВЕТ API (success, URL не найден): ' + raw);
       throw new Error('NanoBanana API: success but no image URL in response');
     }
     if (successFlag === 2 || successFlag === 3) {
