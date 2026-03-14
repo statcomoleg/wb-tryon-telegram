@@ -4,6 +4,16 @@ const axios = require('axios');
 const NANO_BANANA_API_KEY = (process.env.NANO_BANANA_API_KEY || '').trim();
 const NANO_BANANA_BASE_URL = (process.env.NANO_BANANA_BASE_URL || 'https://api.nanobananaapi.ai').replace(/\/+$/, '');
 
+// Базовый промпт для примерки: откуда брать человека, откуда — одежду.
+// Можно переопределить через NANO_BANANA_PROMPT в Environment (Render).
+// Плейсхолдеры: {personCount} — число фото человека, {productCount} — число фото товара.
+const DEFAULT_TRYON_PROMPT =
+  'IMPORTANT — image order: The FIRST {personCount} images are the PERSON. Use ONLY this person\'s face and body. ' +
+  'The LAST {productCount} images are the GARMENT/product. Put this clothing ON that person. ' +
+  'Do NOT use the face or body from the product images. ' +
+  'Output: one photorealistic photo, same person as in the first images wearing the garment from the last images, neutral clean background, fashion try-on. Single image only.';
+const NANO_BANANA_PROMPT = (process.env.NANO_BANANA_PROMPT || '').trim() || null;
+
 function getAuthHeaders() {
   if (NANO_BANANA_API_KEY) {
     return { Authorization: `Bearer ${NANO_BANANA_API_KEY}` };
@@ -48,9 +58,12 @@ async function createGenerationTask({ prompt, referenceImages }) {
 
   const res = response.data;
   if (!res || res.code !== 200 || !res.data?.taskId) {
-    throw new Error(
-      `NanoBanana API: ${res?.msg || res?.message || 'unexpected response'} ${JSON.stringify(res || {})}`
-    );
+    const code = res?.code ?? response?.status;
+    const msg = res?.msg || res?.message || 'unexpected response';
+    if (code === 402) {
+      throw new Error('Недостаточно кредитов на балансе NanoBanana. Пополните счёт на nanobananaapi.ai');
+    }
+    throw new Error(`NanoBanana API: ${msg}`);
   }
   return res.data.taskId;
 }
@@ -114,11 +127,13 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
   const personRefs = appearance?.referenceImages || [];
   const productRefs = Array.isArray(productImages) ? productImages.slice(0, 2) : [];
   const referenceImages = [...personRefs, ...productRefs].slice(0, 8);
+  const personCount = personRefs.length;
+  const productCount = productRefs.length;
 
-  const prompt =
-    'Single image only. This exact person from the first reference photos wearing the clothing from the last reference images. ' +
-    'One photorealistic collage: same face and body as in references, wearing the garment, neutral clean background, fashion try-on. ' +
-    'Output exactly one image.';
+  const basePrompt = NANO_BANANA_PROMPT || DEFAULT_TRYON_PROMPT;
+  const prompt = basePrompt
+    .replace(/\{personCount\}/g, String(personCount))
+    .replace(/\{productCount\}/g, String(productCount));
 
   try {
     const taskId = await createGenerationTask({ prompt, referenceImages });
