@@ -1,26 +1,23 @@
 const axios = require('axios');
 
-const NANO_BANANA_API_KEY = process.env.NANO_BANANA_API_KEY || '';
-// According to official docs, Nano Banana Pro API is served via defapi.org
-// https://nanobananaproapi.org/docs
-const NANO_BANANA_BASE_URL = process.env.NANO_BANANA_BASE_URL || 'https://api.defapi.org';
-const NANO_BANANA_MODEL_ID = process.env.NANO_BANANA_MODEL_ID || 'google/gempix2';
+// NanoBanana API (https://docs.nanobananaapi.ai) — базовый URL и ключ
+const NANO_BANANA_API_KEY = (process.env.NANO_BANANA_API_KEY || '').trim();
+const NANO_BANANA_BASE_URL = (process.env.NANO_BANANA_BASE_URL || 'https://api.nanobananaapi.ai').replace(/\/+$/, '');
+
+function getAuthHeaders() {
+  if (NANO_BANANA_API_KEY) {
+    return { Authorization: `Bearer ${NANO_BANANA_API_KEY}` };
+  }
+  return {};
+}
 
 /**
- * For our use‑case "виртуальная внешность" — это набор референс‑фото,
- * которые мы будем передавать в Nano Banana Pro при генерации фотосессии.
- * Сама API не требует отдельного шага "создать персонажа", поэтому
- * на этом шаге мы просто валидируем и сохраняем данные.
+ * Сохраняем «внешность» пользователя как набор URL референс-фото для генерации.
  */
 async function createOrUpdateAppearance({ userId, photoUrls }) {
   if (!Array.isArray(photoUrls) || photoUrls.length === 0) {
     throw new Error('photoUrls are required');
   }
-
-  // Здесь можно было бы загрузить фото в своё хранилище.
-  // Для простоты считаем, что Nano Banana Pro умеет работать
-  // с внешними URL и data: URI (base64), как указано в доках.
-
   return {
     id: `appearance-${userId}`,
     referenceImages: photoUrls
@@ -28,103 +25,78 @@ async function createOrUpdateAppearance({ userId, photoUrls }) {
 }
 
 /**
- * Вспомогательная функция: создать задачу генерации в Nano Banana Pro.
- * Возвращает task_id.
- * num_images: запросить 1 картинку (коллаж) или несколько.
+ * Создать задачу генерации (NanoBanana Pro): POST /api/v1/nanobanana/generate-pro
+ * Документация: https://docs.nanobananaapi.ai/nanobanana-api/generate-image-pro
  */
-async function createGenerationTask({ prompt, referenceImages, numImages = 1 }) {
+async function createGenerationTask({ prompt, referenceImages }) {
   const body = {
-    model: NANO_BANANA_MODEL_ID,
     prompt,
-    images: Array.isArray(referenceImages) ? referenceImages.slice(0, 4) : undefined
+    imageUrls: Array.isArray(referenceImages) ? referenceImages.slice(0, 8) : [],
+    resolution: process.env.NANO_BANANA_RESOLUTION || '2K',
+    aspectRatio: process.env.NANO_BANANA_ASPECT_RATIO || '3:4'
   };
-  if (numImages >= 1 && numImages <= 8) {
-    body.n = numImages;
-  }
-  const response = await axios.post(
-    `${NANO_BANANA_BASE_URL}/api/image/gen`,
-    body,
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${NANO_BANANA_API_KEY}`
-      },
-      timeout: 30000
-    }
-  );
+  if (body.imageUrls.length === 0) delete body.imageUrls;
 
-  if (!response.data || response.data.code !== 0 || !response.data.data?.task_id) {
+  const url = `${NANO_BANANA_BASE_URL}/api/v1/nanobanana/generate-pro`;
+  const response = await axios.post(url, body, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    timeout: 30000
+  });
+
+  const res = response.data;
+  if (!res || res.code !== 200 || !res.data?.taskId) {
     throw new Error(
-      `Nano Banana Pro: unexpected response ${JSON.stringify(response.data || {}, null, 2)}`
+      `NanoBanana API: ${res?.msg || res?.message || 'unexpected response'} ${JSON.stringify(res || {})}`
     );
   }
-
-  return response.data.data.task_id;
+  return res.data.taskId;
 }
 
 /**
- * Вспомогательная функция: опросить статус задачи и вернуть массив url‑ов картинок.
+ * Опросить статус задачи: GET /api/v1/nanobanana/record-info?taskId=...
+ * successFlag: 0=generating, 1=success, 2=create failed, 3=generation failed
  */
-async function waitForTaskResult(taskId, { pollIntervalMs = 2000, timeoutMs = 60000 } = {}) {
+async function waitForTaskResult(taskId, { pollIntervalMs = 3000, timeoutMs = 120000 } = {}) {
   const start = Date.now();
+  const url = `${NANO_BANANA_BASE_URL}/api/v1/nanobanana/record-info`;
 
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    if (Date.now() - start > timeoutMs) {
-      throw new Error('Nano Banana Pro: timeout while waiting for task result');
+  while (Date.now() - start < timeoutMs) {
+    const response = await axios.get(url, {
+      params: { taskId },
+      headers: getAuthHeaders(),
+      timeout: 15000
+    });
+
+    const res = response.data;
+    if (res && res.code !== undefined && res.code !== 200) {
+      throw new Error(`NanoBanana API: ${res.msg || res.message || 'query failed'}`);
     }
 
-    const response = await axios.get(
-      `${NANO_BANANA_BASE_URL}/api/task/query`,
-      {
-        params: { task_id: taskId },
-        headers: {
-          Authorization: `Bearer ${NANO_BANANA_API_KEY}`
-        },
-        timeout: 15000
-      }
-    );
+    const data = res?.data ?? res;
+    const successFlag = data?.successFlag ?? -1;
 
-    const data = response.data;
-
-    if (!data) {
-      await new Promise((r) => setTimeout(r, pollIntervalMs));
-      continue;
+    if (successFlag === 1) {
+      const resultUrl = data?.response?.resultImageUrl || data?.response?.originImageUrl;
+      if (resultUrl) return [resultUrl];
+      throw new Error('NanoBanana API: success but no image URL in response');
+    }
+    if (successFlag === 2 || successFlag === 3) {
+      const msg = data?.errorMessage || data?.errorCode || 'Generation failed';
+      throw new Error(`NanoBanana API: ${msg}`);
     }
 
-    const status = data.status || data.data?.status;
-    const result = data.result || data.data?.result;
-
-    if (!status || status === 'pending' || status === 'submitted' || status === 'in_progress') {
-      await new Promise((r) => setTimeout(r, pollIntervalMs));
-      continue;
-    }
-
-    if (status !== 'success') {
-      const message = data.status_reason?.message || data.message || 'Unknown error';
-      throw new Error(`Nano Banana Pro task failed: ${message}`);
-    }
-
-    if (!Array.isArray(result) || result.length === 0) {
-      throw new Error('Nano Banana Pro: empty result');
-    }
-
-    const images = result
-      .map((item) => item.image)
-      .filter(Boolean);
-
-    if (!images.length) {
-      throw new Error('Nano Banana Pro: no image URLs in result');
-    }
-
-    return images;
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
   }
+
+  throw new Error('NanoBanana API: timeout waiting for task result');
 }
 
 /**
- * Генерация одного коллажа: человек с референс‑фото в одежде с фото товара.
- * Референсы: сначала фото человека (внешность), потом 1–2 фото товара (одежда).
- * Запрашиваем 1 изображение — один коллаж.
+ * Генерация одного коллажа: человек с референс-фото в одежде с фото товара.
+ * Референсы: сначала фото человека, потом 1–2 фото товара (до 8 всего).
  */
 async function generatePhotoshoot({ appearance, productImages, sessionId }) {
   const fallbackResult = () => ({
@@ -140,58 +112,61 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
 
   const personRefs = appearance?.referenceImages || [];
   const productRefs = Array.isArray(productImages) ? productImages.slice(0, 2) : [];
-  const referenceImages = [...personRefs, ...productRefs].slice(0, 4);
+  const referenceImages = [...personRefs, ...productRefs].slice(0, 8);
 
   const prompt =
     'Single image only. This exact person from the first reference photos wearing the clothing from the last reference images. ' +
     'One photorealistic collage: same face and body as in references, wearing the garment, neutral clean background, fashion try-on. ' +
-    'Output exactly one image, no multiple panels.';
+    'Output exactly one image.';
 
   try {
-    const taskId = await createGenerationTask({
-      prompt,
-      referenceImages,
-      numImages: 1
-    });
+    const taskId = await createGenerationTask({ prompt, referenceImages });
     const images = await waitForTaskResult(taskId, {
-      pollIntervalMs: 2500,
-      timeoutMs: 90000
+      pollIntervalMs: 3000,
+      timeoutMs: 120000
     });
     return { sessionId, images, generated: true };
   } catch (err) {
-    console.error('Nano Banana Pro API failed, returning product images as fallback:', err && err.message);
+    console.error('NanoBanana API failed, returning product images as fallback:', err?.message);
     return fallbackResult();
   }
 }
 
 /**
- * Тест подключения к Nano Banana Pro: одна простая генерация без референсов.
- * Возвращает { success: true, image } или { success: false, error }.
+ * Тест: одна простая генерация без референсов.
  */
 async function testGeneration() {
   if (!NANO_BANANA_API_KEY) {
-    return { success: false, error: 'NANO_BANANA_API_KEY не задан в настройках сервера.' };
+    return {
+      success: false,
+      error: 'NANO_BANANA_API_KEY не задан. Получите ключ на https://nanobananaapi.ai/api-key'
+    };
+  }
+  if (NANO_BANANA_API_KEY.length < 10) {
+    return { success: false, error: 'NANO_BANANA_API_KEY слишком короткий — вставьте ключ целиком.' };
   }
   try {
     const taskId = await createGenerationTask({
       prompt: 'A single red apple on a white background, photorealistic.',
-      referenceImages: [],
-      numImages: 1
+      referenceImages: []
     });
-    const images = await waitForTaskResult(taskId, {
-      pollIntervalMs: 2000,
-      timeoutMs: 60000
-    });
+    const images = await waitForTaskResult(taskId, { pollIntervalMs: 3000, timeoutMs: 60000 });
     return {
       success: true,
       image: images[0],
-      message: 'Nano Banana Pro отвечает, генерация работает.'
+      message: 'NanoBanana API отвечает, генерация работает.',
+      baseUrl: NANO_BANANA_BASE_URL
     };
   } catch (err) {
+    const msg = err?.message || String(err);
+    const is401 = err?.response?.status === 401;
     return {
       success: false,
-      error: err && err.message ? err.message : String(err),
-      message: 'Nano Banana Pro не ответил. Проверьте ключ, URL и квоты.'
+      error: msg,
+      message: is401
+        ? '401 Unauthorized: проверьте ключ на https://nanobananaapi.ai/api-key и переменную NANO_BANANA_API_KEY в Render.'
+        : 'NanoBanana API не ответил. Проверьте ключ, квоты и логи.',
+      baseUrl: NANO_BANANA_BASE_URL
     };
   }
 }
@@ -205,4 +180,3 @@ const nanoBananaClient = {
 module.exports = {
   nanoBananaClient
 };
-
