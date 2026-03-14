@@ -11,7 +11,6 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
-const { initBot } = require('./telegramBot');
 const { nanoBananaClient } = require('./services/nanoBananaClient');
 const { analyzeProductUrl } = require('./services/productAnalyzer');
 const { sessionStore } = require('./services/sessionStore');
@@ -154,12 +153,14 @@ app.get('/api/sessions/:telegramUserId', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server listening on http://localhost:${PORT}`);
-  // Start bot after server is up; don't crash if bot fails
+  // Load and start bot only after server is up (avoids crash if bot module fails)
   setImmediate(() => {
     try {
+      const { initBot } = require('./telegramBot');
       initBot();
     } catch (err) {
-      console.error('Telegram bot init failed (server still running):', err && err.message);
+      console.error('Telegram bot load/init failed (server still running):', err && err.message);
+      if (err && err.stack) console.error(err.stack);
     }
   });
 });
