@@ -1,5 +1,12 @@
 require('dotenv').config();
 
+// Log any crash so Render captures it
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err && err.message);
+  if (err && err.stack) console.error(err.stack);
+  process.exit(1);
+});
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -144,11 +151,16 @@ app.get('/api/sessions/:telegramUserId', (req, res) => {
   res.json({ sessions });
 });
 
-// Initialize Telegram bot (long polling for local dev)
-initBot();
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server listening on http://localhost:${PORT}`);
+  // Start bot after server is up; don't crash if bot fails
+  setImmediate(() => {
+    try {
+      initBot();
+    } catch (err) {
+      console.error('Telegram bot init failed (server still running):', err && err.message);
+    }
+  });
 });
 

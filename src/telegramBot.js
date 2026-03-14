@@ -11,8 +11,15 @@ function initBot() {
     return;
   }
 
-  const bot = new TelegramBot(BOT_TOKEN, { polling: true });
-  botInstance = bot;
+  try {
+    const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+    botInstance = bot;
+  } catch (err) {
+    console.error('Telegram bot failed to start:', err && err.message);
+    return;
+  }
+
+  const bot = botInstance;
 
   bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id;
