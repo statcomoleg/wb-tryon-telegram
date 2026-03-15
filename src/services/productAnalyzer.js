@@ -220,30 +220,28 @@ async function resolveOzonShortLink(shortUrl) {
  * Короткие ссылки (ozon.ru/t/xxx) сначала разрешаются в полные по редиректу, затем грузится страница товара.
  */
 async function resolveOzonImageUrls(productUrl) {
-  let fetchUrl = productUrl;
-  if (/ozon\.ru\/t\//i.test(productUrl)) {
-    const fullUrl = await resolveOzonShortLink(productUrl);
+  let fetchUrl = (productUrl || '').trim().replace(/\s+/g, '%20');
+  if (/ozon\.ru\/t\//i.test(fetchUrl)) {
+    const fullUrl = await resolveOzonShortLink(fetchUrl);
     if (fullUrl) fetchUrl = fullUrl;
   }
-  // Единый вид хоста для запроса (иногда без www отдают 403)
   if (/^https?:\/\/ozon\.ru\//i.test(fetchUrl)) {
     fetchUrl = fetchUrl.replace(/^https?:\/\/ozon\.ru/i, 'https://www.ozon.ru');
   }
   try {
-    // Следуем редиректам вручную, чтобы не зациклиться на www ↔ ozon
     const opts = { timeout: 15000, maxRedirects: 0, headers: getOzonHeaders(), validateStatus: () => true };
     let res;
     let currentUrl = fetchUrl;
-    const seen = new Set();
-    for (let step = 0; step < 6; step++) {
-      if (seen.has(currentUrl)) break;
-      seen.add(currentUrl);
+    const maxSteps = 12;
+    for (let step = 0; step < maxSteps; step++) {
       res = await axios.get(currentUrl, opts);
       if (res.status === 200) break;
       if (![301, 302, 307, 308].includes(res.status)) break;
-      const loc = res.headers.location;
-      if (!loc || typeof loc !== 'string') break;
-      currentUrl = url.resolve(currentUrl, loc.trim());
+      const loc = (res.headers['location'] || res.headers['Location'] || '').trim();
+      if (!loc) break;
+      const nextUrl = loc.startsWith('http') ? loc : url.resolve(currentUrl, loc);
+      if (nextUrl === currentUrl) break;
+      currentUrl = nextUrl;
     }
     if (res.status === 403 && fetchUrl.includes('www.ozon.ru')) {
       const altUrl = fetchUrl.replace(/https?:\/\/www\.ozon\.ru/i, 'https://ozon.ru');
