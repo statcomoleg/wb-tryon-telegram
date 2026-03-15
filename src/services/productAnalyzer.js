@@ -165,11 +165,18 @@ async function getWildberriesImageUrlsFromPage(productUrl) {
   }
 }
 
-const BROWSER_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8'
-};
+function getOzonHeaders() {
+  const base = 'https://www.ozon.ru';
+  return {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+    Referer: base + '/',
+    Origin: base,
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate'
+  };
+}
 
 /**
  * Разрешить короткую ссылку Ozon (ozon.ru/t/xxx) в полную (ozon.ru/product/...).
@@ -180,7 +187,7 @@ async function resolveOzonShortLink(shortUrl) {
     const res = await axios.get(shortUrl, {
       timeout: 8000,
       maxRedirects: 0,
-      headers: BROWSER_HEADERS,
+      headers: getOzonHeaders(),
       validateStatus: (s) => s === 200 || s === 301 || s === 302
     });
     if (res.status === 301 || res.status === 302) {
@@ -206,35 +213,72 @@ async function resolveOzonImageUrls(productUrl) {
     const fullUrl = await resolveOzonShortLink(productUrl);
     if (fullUrl) fetchUrl = fullUrl;
   }
+  // Единый вид хоста для запроса (иногда без www отдают 403)
+  if (/^https?:\/\/ozon\.ru\//i.test(fetchUrl)) {
+    fetchUrl = fetchUrl.replace(/^https?:\/\/ozon\.ru/i, 'https://www.ozon.ru');
+  }
   try {
-    const res = await axios.get(fetchUrl, {
-      timeout: 10000,
+    let res = await axios.get(fetchUrl, {
+      timeout: 12000,
       maxRedirects: 5,
-      headers: BROWSER_HEADERS,
-      validateStatus: (status) => status === 200
+      headers: getOzonHeaders(),
+      validateStatus: () => true
     });
+    if (res.status === 403 && fetchUrl.includes('www.ozon.ru')) {
+      const altUrl = fetchUrl.replace(/https?:\/\/www\.ozon\.ru/i, 'https://ozon.ru');
+      res = await axios.get(altUrl, {
+        timeout: 12000,
+        maxRedirects: 5,
+        headers: getOzonHeaders(),
+        validateStatus: () => true
+      });
+    }
+    if (res.status !== 200) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[Ozon] fetch status', res.status, 'url=', fetchUrl.slice(0, 60));
+      }
+      return [];
+    }
     const html = res.data && typeof res.data === 'string' ? res.data : '';
     const found = new Set();
+    const normalize = (u) => u.replace(/\\u002F/g, '/').replace(/["'\s)]+$/, '').trim();
+
     // Прямые ссылки на CDN в HTML
     const cdnRegex = /https?:\/\/[^"'\s<>]*?cdn\d*\.ozon\.ru[^"'\s<>]*\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s<>]*)?/gi;
     const multiRegex = /https?:\/\/[^"'\s<>]*?multimedia[^"'\s<>]*\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s<>]*)?/gi;
     let m;
-    while ((m = cdnRegex.exec(html)) !== null) found.add(m[0].replace(/["'\s)]+$/, ''));
-    while ((m = multiRegex.exec(html)) !== null) found.add(m[0].replace(/["'\s)]+$/, ''));
-    // Часто Ozon кладёт URL в JSON (в скриптах или data-атрибутах)
+    while ((m = cdnRegex.exec(html)) !== null) found.add(normalize(m[0]));
+    while ((m = multiRegex.exec(html)) !== null) found.add(normalize(m[0]));
+    // img*.ozon.ru, images.ozon.ru и т.п.
+    const imgOzon = /https?:\/\/[^"'\s<>]*?(?:img|images?)\d*\.?ozon\.ru[^"'\s<>]*\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s<>]*)?/gi;
+    while ((m = imgOzon.exec(html)) !== null) found.add(normalize(m[0]));
+    // JSON в скриптах (unicode-экранирование)
     const jsonImageRegex = /https?:\/\/[^"'\s]*?(?:cdn\d*\.ozon\.ru|multimedia[^"'\s]*\.ozon\.ru)[^"'\s]*\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s]*)?/gi;
-    while ((m = jsonImageRegex.exec(html)) !== null) found.add(m[0].replace(/\\u002F/g, '/').replace(/["'\s)]+$/, ''));
-    // Широкий поиск: любой хост *ozon.ru с путём к картинке
-    if (found.size === 0) {
-      const wideOzon = /https?:\/\/[^"'\s<>]*(?:[^/]*\.)?ozon\.ru[^"'\s<>]*\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s<>]*)?/gi;
-      while ((m = wideOzon.exec(html)) !== null) {
-        const u = m[0].replace(/\\u002F/g, '/').replace(/["'\s)]+$/, '');
-        if (!/\.(?:svg|gif|ico)(?:\?|$)/i.test(u)) found.add(u);
+    while ((m = jsonImageRegex.exec(html)) !== null) found.add(normalize(m[0]));
+    // Любой поддомен ozon с картинкой
+    const wideOzon = /https?:\/\/[^"'\s<>]*(?:[^/]*\.)?ozon\.ru[^"'\s<>]*\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s<>]*)?/gi;
+    while ((m = wideOzon.exec(html)) !== null) {
+      const u = normalize(m[0]);
+      if (!/\.(?:svg|gif|ico)(?:\?|$)/i.test(u)) found.add(u);
+    }
+    // Последний шанс: любая ссылка на изображение, в тексте которой есть "ozon"
+    if (found.size === 0 && html.length > 500) {
+      const anyImage = /https?:\/\/[^"'\s<>]+\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s<>]*)?/gi;
+      while ((m = anyImage.exec(html)) !== null) {
+        const u = normalize(m[0]);
+        if (u.toLowerCase().includes('ozon') && !/\.(?:svg|gif|ico)(?:\?|$)/i.test(u)) found.add(u);
       }
     }
+
     const arr = [...found].filter((u) => !/\.(?:svg|gif|ico)(?:\?|$)/i.test(u)).slice(0, 5);
+    if (arr.length === 0 && process.env.NODE_ENV !== 'production' && html.length > 100) {
+      console.warn('[Ozon] no image URLs found, html length=', html.length);
+    }
     return arr.length ? arr : [];
-  } catch (_) {
+  } catch (e) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('[Ozon] resolveOzonImageUrls error:', e?.message || e);
+    }
     return [];
   }
 }
