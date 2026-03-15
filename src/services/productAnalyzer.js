@@ -75,36 +75,45 @@ async function resolveWildberriesImageUrls(productUrl) {
 
   const pathPartBig = `vol${vol}/part${part}/${nmId}/images/big/`;
   const pathPartPlain = `vol${vol}/part${part}/${nmId}/images/`;
-  const makeUrl = (domain, pathPart, n) => `https://basket-${hostNum}.${domain}/${pathPart}${n}.webp`;
 
-  const tryDomain = async (domain, pathPart) => {
+  const tryDomain = async (domain, pathPart, host) => {
     const found = [];
+    const mk = (n) => `https://basket-${host}.${domain}/${pathPart}${n}.webp`;
     for (let n = 1; n <= 3; n++) {
       try {
-        const res = await axios.head(makeUrl(domain, pathPart, n), {
+        const res = await axios.head(mk(n), {
           timeout: 6000,
           validateStatus: () => true,
           maxRedirects: 3
         });
-        if (res.status === 200) found.push(makeUrl(domain, pathPart, n));
+        const ct = (res.headers && res.headers['content-type']) || '';
+        const isImage = /^image\/(jpeg|jpg|png|webp|avif)/i.test(ct);
+        if (res.status === 200 && isImage) found.push(mk(n));
       } catch (_) {}
     }
     return found.length ? found : null;
   };
 
   for (const domain of ['wb.ru', 'wbbasket.ru']) {
-    const urls = await tryDomain(domain, pathPartBig);
+    const urls = await tryDomain(domain, pathPartBig, hostNum);
     if (urls && urls.length) return urls;
   }
   for (const domain of ['wb.ru', 'wbbasket.ru']) {
-    const urls = await tryDomain(domain, pathPartPlain);
+    const urls = await tryDomain(domain, pathPartPlain, hostNum);
     if (urls && urls.length) return urls;
+  }
+  // для высоких nmId пробуем ещё host 01 (часть товаров зеркалится)
+  if (hostNum !== '01') {
+    for (const domain of ['wb.ru', 'wbbasket.ru']) {
+      const urls = await tryDomain(domain, pathPartBig, '01');
+      if (urls && urls.length) return urls;
+    }
   }
 
   const fromPage = await getWildberriesImageUrlsFromPage(productUrl);
   if (fromPage.length) return fromPage;
 
-  return [makeUrl('wb.ru', pathPartBig, 1)];
+  return [`https://basket-${hostNum}.wb.ru/${pathPartBig}1.webp`];
 }
 
 /**
@@ -124,7 +133,7 @@ async function getWildberriesImageUrlsFromPage(productUrl) {
     });
     const html = (res.data && typeof res.data === 'string') ? res.data : '';
     const found = new Set();
-    const re = /https?:\/\/[^"'\s<>]*?basket-\d+\.(?:wb\.ru|wbbasket\.ru)[^"'\s<>]*\.(?:webp|jpg|jpeg|png)(?:\?[^"'\s<>]*)?/gi;
+    const re = /https?:\/\/[^"'\s<>]*?(?:basket-\d+\.(?:wb\.ru|wbbasket\.ru)|[\w-]+\.wb\.ru)[^"'\s<>]*\.(?:webp|jpg|jpeg|png|avif)(?:\?[^"'\s<>]*)?/gi;
     let m;
     while ((m = re.exec(html)) !== null) found.add(m[0].replace(/["'\s)]+$/, ''));
     const arr = [...found].slice(0, 5);
@@ -132,7 +141,9 @@ async function getWildberriesImageUrlsFromPage(productUrl) {
     for (const u of arr) {
       try {
         const r = await axios.head(u, { timeout: 4000, validateStatus: () => true, maxRedirects: 2 });
-        if (r.status === 200) verified.push(u);
+        const ct = (r.headers && r.headers['content-type']) || '';
+        const isImage = /^image\/(jpeg|jpg|png|webp|avif)/i.test(ct);
+        if (r.status === 200 && isImage) verified.push(u);
       } catch (_) {}
     }
     return verified;

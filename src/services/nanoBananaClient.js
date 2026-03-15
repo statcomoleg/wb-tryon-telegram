@@ -5,11 +5,11 @@ const { tempImageStore } = require('./tempImageStore');
 const NANO_BANANA_API_KEY = (process.env.NANO_BANANA_API_KEY || '').trim();
 const NANO_BANANA_BASE_URL = (process.env.NANO_BANANA_BASE_URL || 'https://api.nanobananaapi.ai').replace(/\/+$/, '');
 
-// Промпт: кто человек, что одежда, один кадр или коллаж. Плейсхолдеры: {personCount}, {productCount}.
-// Полный вариант (ПРИМЕРЯЙКА, ракурсы) — через NANO_BANANA_PROMPT в Environment.
+// Промпт: только моя внешность во всех кадрах, с карточки — только одежда. Плейсхолдеры: {personCount}, {productCount}.
 const DEFAULT_TRYON_PROMPT =
-  'First {personCount} images = the person (use only this face and body). Last {productCount} images = the garment. ' +
-  'Put the garment on this person. One photorealistic 16:9 image, neutral background. If possible, show several angles or frames in one collage.';
+  'First {personCount} images = the ONLY person. Use exclusively this face and body in every frame. ' +
+  'Last {productCount} images = the garment/clothing only. Extract ONLY the clothing from these images. Do NOT use any face, body or model visible in the garment images. ' +
+  'Result: the same person from the first images wearing the clothing, in every part of the image. One photorealistic 16:9 image, neutral background. If collage, all frames must show only this one person.';
 const NANO_BANANA_PROMPT = (process.env.NANO_BANANA_PROMPT || '').trim() || null;
 
 function getAuthHeaders() {
