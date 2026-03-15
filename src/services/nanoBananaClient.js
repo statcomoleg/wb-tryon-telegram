@@ -160,7 +160,8 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
 
   const personRefs = appearance?.referenceImages || [];
   const productRefs = Array.isArray(productImages) ? productImages.slice(0, 2) : [];
-  let referenceImages = [...personRefs, ...productRefs].slice(0, 8);
+  const garmentUrls = productRefs.length >= 2 ? productRefs : productRefs.length === 1 ? [productRefs[0], productRefs[0]] : [];
+  let referenceImages = [...personRefs, ...garmentUrls].slice(0, 8);
 
   const baseAppUrl = (process.env.PUBLIC_APP_URL || process.env.WEBAPP_URL || '').replace(/\/webapp\/?$/, '').replace(/\/+$/, '');
   if (baseAppUrl && referenceImages.some((u) => typeof u === 'string' && u.startsWith('data:image/'))) {
@@ -172,7 +173,7 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
   }
 
   const personCount = personRefs.length;
-  const productCount = productRefs.length;
+  const productCount = garmentUrls.length;
 
   const basePrompt = NANO_BANANA_PROMPT || DEFAULT_TRYON_PROMPT;
   const prompt = basePrompt
