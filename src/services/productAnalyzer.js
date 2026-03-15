@@ -236,20 +236,27 @@ async function resolveOzonImageUrls(productUrl) {
       return u;
     }
   };
+  // Строго 1 редирект — иначе Ozon зацикливает и даёт "Maximum number of redirects exceeded"
   const opts = {
     timeout: 20000,
-    maxRedirects: 15,
+    maxRedirects: 1,
     headers: getOzonHeaders(),
     validateStatus: () => true
   };
-  try {
-    let res = await axios.get(fetchUrl, opts);
-    if (res.status !== 200) {
-      const cleanUrl = urlNoQuery(fetchUrl);
-      if (cleanUrl !== fetchUrl) res = await axios.get(cleanUrl, opts);
+  const getOne = async (u) => {
+    try {
+      return await axios.get(u, opts);
+    } catch (e) {
+      if (/redirects? exceeded/i.test(e?.message || '')) return { status: 307 };
+      throw e;
     }
+  };
+  try {
+    const cleanUrl = urlNoQuery(fetchUrl);
+    let res = await getOne(cleanUrl);
+    if (res.status !== 200) res = await getOne(fetchUrl);
     if (res.status !== 200 && fetchUrl.includes('www.ozon.ru')) {
-      res = await axios.get(fetchUrl.replace(/https?:\/\/www\.ozon\.ru/i, 'https://ozon.ru'), opts);
+      res = await getOne(fetchUrl.replace(/https?:\/\/www\.ozon\.ru/i, 'https://ozon.ru'));
     }
     if (res.status !== 200) {
       console.warn('[Ozon] fetch status=', res.status, 'url=', fetchUrl.slice(0, 80));
