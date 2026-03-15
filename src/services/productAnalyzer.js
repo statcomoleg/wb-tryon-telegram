@@ -228,24 +228,39 @@ async function resolveOzonImageUrls(productUrl) {
   if (/^https?:\/\/ozon\.ru\//i.test(fetchUrl)) {
     fetchUrl = fetchUrl.replace(/^https?:\/\/ozon\.ru/i, 'https://www.ozon.ru');
   }
-  try {
+  // URL без query — часто 307 из-за битых параметров (?abt att= и т.д.), чистый путь отдаёт 200
+  const urlNoQuery = (u) => {
+    try {
+      const parsed = url.parse(u);
+      return (parsed.protocol || 'https:') + '//' + (parsed.host || '') + (parsed.pathname || '/');
+    } catch (_) {
+      return u;
+    }
+  };
+  const tryFetch = async (startUrl) => {
     const opts = { timeout: 15000, maxRedirects: 0, headers: getOzonHeaders(), validateStatus: () => true };
     let res;
-    let currentUrl = fetchUrl;
-    const maxSteps = 12;
-    for (let step = 0; step < maxSteps; step++) {
+    let currentUrl = startUrl;
+    for (let step = 0; step < 12; step++) {
       res = await axios.get(currentUrl, opts);
-      if (res.status === 200) break;
-      if (![301, 302, 307, 308].includes(res.status)) break;
+      if (res.status === 200) return res;
+      if (![301, 302, 307, 308].includes(res.status)) return res;
       const loc = (res.headers['location'] || res.headers['Location'] || '').trim();
-      if (!loc) break;
+      if (!loc) return res;
       const nextUrl = loc.startsWith('http') ? loc : url.resolve(currentUrl, loc);
-      if (nextUrl === currentUrl) break;
+      if (nextUrl === currentUrl) return res;
       currentUrl = nextUrl;
+    }
+    return res;
+  };
+  try {
+    let res = await tryFetch(fetchUrl);
+    if (res.status === 307 && fetchUrl.includes('?')) {
+      res = await tryFetch(urlNoQuery(fetchUrl));
     }
     if (res.status === 403 && fetchUrl.includes('www.ozon.ru')) {
       const altUrl = fetchUrl.replace(/https?:\/\/www\.ozon\.ru/i, 'https://ozon.ru');
-      res = await axios.get(altUrl, { ...opts, maxRedirects: 5 });
+      res = await axios.get(altUrl, { timeout: 15000, maxRedirects: 5, headers: getOzonHeaders(), validateStatus: () => true });
     }
     if (res.status !== 200) {
       console.warn('[Ozon] fetch status=', res.status, 'url=', fetchUrl.slice(0, 80));
