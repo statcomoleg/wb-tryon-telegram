@@ -5,11 +5,13 @@ const { tempImageStore } = require('./tempImageStore');
 const NANO_BANANA_API_KEY = (process.env.NANO_BANANA_API_KEY || '').trim();
 const NANO_BANANA_BASE_URL = (process.env.NANO_BANANA_BASE_URL || 'https://api.nanobananaapi.ai').replace(/\/+$/, '');
 
-// Промпт: только моя внешность во всех кадрах, с карточки — только одежда. Плейсхолдеры: {personCount}, {productCount}.
+// Базовый промпт: персона только из первых фото, одежда только из последних; локация ПРИМЕРЯЙКА, ракурсы, стиль RAW/HDR.
 const DEFAULT_TRYON_PROMPT =
   'First {personCount} images = the ONLY person. Use exclusively this face and body in every frame. ' +
   'Last {productCount} images = the garment/clothing only. Extract ONLY the clothing from these images. Do NOT use any face, body or model visible in the garment images. ' +
-  'Result: the same person from the first images wearing the clothing, in every part of the image. One photorealistic 16:9 image, neutral background. If collage, all frames must show only this one person.';
+  'Scene: fitting room with mirror where the person takes photos (visible in the mirror). Black and lime-green colors. Backdrop with text ПРИМЕРЯЙКА. ' +
+  'Result: one 16:9 photorealistic COLLAGE with 2-4 frames. Show different angles: full body from front, from back, from side (as if rear camera in mirror), and a close-up selfie with face (front camera). Every frame = only this person in the ПРИМЕРЯЙКА fitting room. ' +
+  'Photo style: RAW look, subtle HDR typical of modern smartphones, light dust particles on the image, expressive visible light (говорит свет).';
 const NANO_BANANA_PROMPT = (process.env.NANO_BANANA_PROMPT || '').trim() || null;
 
 function getAuthHeaders() {
