@@ -21,6 +21,29 @@ function getAuthHeaders() {
   return {};
 }
 
+/** Загружает картинку по URL (с браузерными заголовками), сохраняет в temp store, возвращает наш temp URL. Нужно для Ozon: CDN отдаёт 403 при запросе с сервера NanoBanana. */
+async function proxyImageUrl(imageUrl, baseAppUrl) {
+  if (!imageUrl || typeof imageUrl !== 'string' || !baseAppUrl) return null;
+  const response = await axios.get(imageUrl, {
+    responseType: 'arraybuffer',
+    timeout: 15000,
+    maxContentLength: 10 * 1024 * 1024,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      Accept: 'image/webp,image/apng,image/*,*/*;q=0.8',
+      'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8'
+    }
+  });
+  if (!response.data || !response.data.length) return null;
+  const contentType = response.headers['content-type'] || 'image/jpeg';
+  const m = contentType.match(/^image\/(\w+)/);
+  const type = m ? m[1] : 'jpeg';
+  const base64 = Buffer.from(response.data).toString('base64');
+  const dataUrl = `data:image/${type};base64,${base64}`;
+  const id = tempImageStore.saveDataUrl(dataUrl);
+  return id ? `${baseAppUrl}/api/temp-image/${id}` : null;
+}
+
 /**
  * Сохраняем «внешность» пользователя как набор URL референс-фото для генерации.
  */
@@ -171,6 +194,23 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
       const id = tempImageStore.saveDataUrl(url);
       return id ? `${baseAppUrl}/api/temp-image/${id}` : url;
     }).filter(Boolean);
+  }
+
+  // Проксируем картинки Ozon: CDN отдаёт 403 при запросе с сервера NanoBanana, поэтому качаем на наш бэкенд и отдаём temp URL
+  if (baseAppUrl && referenceImages.some((u) => typeof u === 'string' && /ozon\.ru/i.test(u))) {
+    referenceImages = await Promise.all(
+      referenceImages.map(async (url) => {
+        if (typeof url !== 'string' || !/ozon\.ru/i.test(url)) return url;
+        try {
+          const proxied = await proxyImageUrl(url, baseAppUrl);
+          return proxied || url;
+        } catch (e) {
+          console.warn('[nanoBanana] Ozon proxy failed for', url.slice(0, 80), e?.message);
+          return url;
+        }
+      })
+    );
+    referenceImages = referenceImages.filter(Boolean);
   }
 
   const personCount = personRefs.length;
