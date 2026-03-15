@@ -75,6 +75,7 @@ async function resolveWildberriesImageUrls(productUrl) {
 
   const pathPartBig = `vol${vol}/part${part}/${nmId}/images/big/`;
   const pathPartPlain = `vol${vol}/part${part}/${nmId}/images/`;
+  const pathPartHq = `vol${vol}/part${part}/${nmId}/images/hq/`;
 
   const tryDomain = async (domain, pathPart, host) => {
     const found = [];
@@ -110,6 +111,16 @@ async function resolveWildberriesImageUrls(productUrl) {
     }
   }
 
+  // часть товаров (например 628558673) отдаётся с basket-XX.wbcontent.net, путь images/hq/
+  for (const host of ['31', '18', '17', '01']) {
+    const urls = await tryDomain('wbcontent.net', pathPartHq, host);
+    if (urls && urls.length) return urls;
+  }
+  for (const host of ['31', '18', '17', '01']) {
+    const urls = await tryDomain('wbcontent.net', pathPartBig, host);
+    if (urls && urls.length) return urls;
+  }
+
   const fromPage = await getWildberriesImageUrlsFromPage(productUrl);
   if (fromPage.length) return fromPage;
 
@@ -133,9 +144,11 @@ async function getWildberriesImageUrlsFromPage(productUrl) {
     });
     const html = (res.data && typeof res.data === 'string') ? res.data : '';
     const found = new Set();
-    const re = /https?:\/\/[^"'\s<>]*?(?:basket-\d+\.(?:wb\.ru|wbbasket\.ru)|[\w-]+\.wb\.ru)[^"'\s<>]*\.(?:webp|jpg|jpeg|png|avif)(?:\?[^"'\s<>]*)?/gi;
+    const reWb = /https?:\/\/[^"'\s<>]*?(?:basket-\d+\.(?:wb\.ru|wbbasket\.ru)|[\w-]+\.wb\.ru)[^"'\s<>]*\.(?:webp|jpg|jpeg|png|avif)(?:\?[^"'\s<>]*)?/gi;
+    const reWbContent = /https?:\/\/[^"'\s<>]*?basket-\d+\.wbcontent\.net[^"'\s<>]*\.(?:webp|jpg|jpeg|png|avif)(?:\?[^"'\s<>]*)?/gi;
     let m;
-    while ((m = re.exec(html)) !== null) found.add(m[0].replace(/["'\s)]+$/, ''));
+    while ((m = reWb.exec(html)) !== null) found.add(m[0].replace(/["'\s)]+$/, ''));
+    while ((m = reWbContent.exec(html)) !== null) found.add(m[0].replace(/["'\s)]+$/, ''));
     const arr = [...found].slice(0, 5);
     const verified = [];
     for (const u of arr) {
