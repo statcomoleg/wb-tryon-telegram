@@ -228,7 +228,6 @@ async function resolveOzonImageUrls(productUrl) {
   if (/^https?:\/\/ozon\.ru\//i.test(fetchUrl)) {
     fetchUrl = fetchUrl.replace(/^https?:\/\/ozon\.ru/i, 'https://www.ozon.ru');
   }
-  // URL без query — часто 307 из-за битых параметров (?abt att= и т.д.), чистый путь отдаёт 200
   const urlNoQuery = (u) => {
     try {
       const parsed = url.parse(u);
@@ -237,30 +236,20 @@ async function resolveOzonImageUrls(productUrl) {
       return u;
     }
   };
-  const tryFetch = async (startUrl) => {
-    const opts = { timeout: 15000, maxRedirects: 0, headers: getOzonHeaders(), validateStatus: () => true };
-    let res;
-    let currentUrl = startUrl;
-    for (let step = 0; step < 12; step++) {
-      res = await axios.get(currentUrl, opts);
-      if (res.status === 200) return res;
-      if (![301, 302, 307, 308].includes(res.status)) return res;
-      const loc = (res.headers['location'] || res.headers['Location'] || '').trim();
-      if (!loc) return res;
-      const nextUrl = loc.startsWith('http') ? loc : url.resolve(currentUrl, loc);
-      if (nextUrl === currentUrl) return res;
-      currentUrl = nextUrl;
-    }
-    return res;
+  const opts = {
+    timeout: 20000,
+    maxRedirects: 15,
+    headers: getOzonHeaders(),
+    validateStatus: () => true
   };
   try {
-    let res = await tryFetch(fetchUrl);
-    if (res.status === 307 && fetchUrl.includes('?')) {
-      res = await tryFetch(urlNoQuery(fetchUrl));
+    let res = await axios.get(fetchUrl, opts);
+    if (res.status !== 200) {
+      const cleanUrl = urlNoQuery(fetchUrl);
+      if (cleanUrl !== fetchUrl) res = await axios.get(cleanUrl, opts);
     }
-    if (res.status === 403 && fetchUrl.includes('www.ozon.ru')) {
-      const altUrl = fetchUrl.replace(/https?:\/\/www\.ozon\.ru/i, 'https://ozon.ru');
-      res = await axios.get(altUrl, { timeout: 15000, maxRedirects: 5, headers: getOzonHeaders(), validateStatus: () => true });
+    if (res.status !== 200 && fetchUrl.includes('www.ozon.ru')) {
+      res = await axios.get(fetchUrl.replace(/https?:\/\/www\.ozon\.ru/i, 'https://ozon.ru'), opts);
     }
     if (res.status !== 200) {
       console.warn('[Ozon] fetch status=', res.status, 'url=', fetchUrl.slice(0, 80));
