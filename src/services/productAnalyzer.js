@@ -230,32 +230,24 @@ async function resolveOzonImageUrls(productUrl) {
     fetchUrl = fetchUrl.replace(/^https?:\/\/ozon\.ru/i, 'https://www.ozon.ru');
   }
   try {
-    // Сначала запрос на главную Ozon — получаем cookies, как в браузере (часто снимает 403)
-    let cookie = '';
-    try {
-      const homeRes = await axios.get('https://www.ozon.ru/', {
-        timeout: 8000,
-        maxRedirects: 3,
-        headers: getOzonHeaders(),
-        validateStatus: () => true
-      });
-      cookie = getCookieString(homeRes.headers['set-cookie']);
-    } catch (_) {}
-
-    let res = await axios.get(fetchUrl, {
-      timeout: 12000,
-      maxRedirects: 5,
-      headers: getOzonHeaders(cookie || undefined),
-      validateStatus: () => true
-    });
+    // Следуем редиректам вручную, чтобы не зациклиться на www ↔ ozon
+    const opts = { timeout: 15000, maxRedirects: 0, headers: getOzonHeaders(), validateStatus: () => true };
+    let res;
+    let currentUrl = fetchUrl;
+    const seen = new Set();
+    for (let step = 0; step < 6; step++) {
+      if (seen.has(currentUrl)) break;
+      seen.add(currentUrl);
+      res = await axios.get(currentUrl, opts);
+      if (res.status === 200) break;
+      if (res.status !== 301 && res.status !== 302) break;
+      const loc = res.headers.location;
+      if (!loc || typeof loc !== 'string') break;
+      currentUrl = url.resolve(currentUrl, loc.trim());
+    }
     if (res.status === 403 && fetchUrl.includes('www.ozon.ru')) {
       const altUrl = fetchUrl.replace(/https?:\/\/www\.ozon\.ru/i, 'https://ozon.ru');
-      res = await axios.get(altUrl, {
-        timeout: 12000,
-        maxRedirects: 5,
-        headers: getOzonHeaders(cookie || undefined),
-        validateStatus: () => true
-      });
+      res = await axios.get(altUrl, { ...opts, maxRedirects: 5 });
     }
     if (res.status !== 200) {
       console.warn('[Ozon] fetch status=', res.status, 'url=', fetchUrl.slice(0, 80));
