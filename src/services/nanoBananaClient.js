@@ -38,6 +38,7 @@ async function createOrUpdateAppearance({ userId, photoUrls }) {
  * Документация: https://docs.nanobananaapi.ai/nanobanana-api/generate-image-pro
  */
 async function createGenerationTask({ prompt, referenceImages }) {
+  const baseAppUrl = (process.env.PUBLIC_APP_URL || process.env.WEBAPP_URL || '').replace(/\/webapp\/?$/, '').replace(/\/+$/, '');
   const body = {
     prompt,
     imageUrls: Array.isArray(referenceImages) ? referenceImages.slice(0, 8) : [],
@@ -45,6 +46,7 @@ async function createGenerationTask({ prompt, referenceImages }) {
     aspectRatio: process.env.NANO_BANANA_ASPECT_RATIO || '16:9'
   };
   if (body.imageUrls.length === 0) delete body.imageUrls;
+  if (baseAppUrl) body.callBackUrl = `${baseAppUrl}/api/nanobanana-callback`;
 
   const url = `${NANO_BANANA_BASE_URL}/api/v1/nanobanana/generate-pro`;
   const response = await axios.post(url, body, {

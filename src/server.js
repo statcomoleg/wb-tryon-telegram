@@ -54,6 +54,10 @@ app.get('/api/temp-image/:id', (req, res) => {
   }
 });
 
+app.post('/api/nanobanana-callback', (req, res) => {
+  res.status(200).send();
+});
+
 // Telegram webhook (чтобы не было 409: только один приём обновлений вместо polling)
 app.post('/telegram-webhook', (req, res) => {
   res.status(200).send();
