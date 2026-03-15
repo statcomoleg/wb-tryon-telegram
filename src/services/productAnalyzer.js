@@ -240,7 +240,7 @@ async function resolveOzonImageUrls(productUrl) {
       seen.add(currentUrl);
       res = await axios.get(currentUrl, opts);
       if (res.status === 200) break;
-      if (res.status !== 301 && res.status !== 302) break;
+      if (![301, 302, 307, 308].includes(res.status)) break;
       const loc = res.headers.location;
       if (!loc || typeof loc !== 'string') break;
       currentUrl = url.resolve(currentUrl, loc.trim());
