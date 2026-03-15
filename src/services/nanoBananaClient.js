@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { tempImageStore } = require('./tempImageStore');
 
 // NanoBanana API (https://docs.nanobananaapi.ai) — базовый URL и ключ
 const NANO_BANANA_API_KEY = (process.env.NANO_BANANA_API_KEY || '').trim();
@@ -157,7 +158,17 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
 
   const personRefs = appearance?.referenceImages || [];
   const productRefs = Array.isArray(productImages) ? productImages.slice(0, 2) : [];
-  const referenceImages = [...personRefs, ...productRefs].slice(0, 8);
+  let referenceImages = [...personRefs, ...productRefs].slice(0, 8);
+
+  const baseAppUrl = (process.env.PUBLIC_APP_URL || process.env.WEBAPP_URL || '').replace(/\/webapp\/?$/, '').replace(/\/+$/, '');
+  if (baseAppUrl && referenceImages.some((u) => typeof u === 'string' && u.startsWith('data:image/'))) {
+    referenceImages = referenceImages.map((url) => {
+      if (typeof url !== 'string' || !url.startsWith('data:image/')) return url;
+      const id = tempImageStore.saveDataUrl(url);
+      return id ? `${baseAppUrl}/api/temp-image/${id}` : url;
+    }).filter(Boolean);
+  }
+
   const personCount = personRefs.length;
   const productCount = productRefs.length;
 

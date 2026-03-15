@@ -14,6 +14,7 @@ const path = require('path');
 const { nanoBananaClient } = require('./services/nanoBananaClient');
 const { analyzeProductUrl } = require('./services/productAnalyzer');
 const { sessionStore } = require('./services/sessionStore');
+const { tempImageStore } = require('./services/tempImageStore');
 
 const app = express();
 
@@ -29,6 +30,23 @@ app.use('/webapp', express.static(path.join(__dirname, '..', 'public')));
 // Healthcheck
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
+});
+
+const PUBLIC_APP_URL = (process.env.PUBLIC_APP_URL || process.env.WEBAPP_URL || '')
+  .replace(/\/webapp\/?$/, '')
+  .replace(/\/+$/, '');
+
+app.get('/api/temp-image/:id', (req, res) => {
+  const dataUrl = tempImageStore.get(req.params.id);
+  if (!dataUrl) return res.status(404).send('Not found');
+  const m = dataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/);
+  if (!m) return res.status(400).send('Invalid');
+  try {
+    res.setHeader('Content-Type', m[1]);
+    res.send(Buffer.from(m[2], 'base64'));
+  } catch (e) {
+    res.status(500).send('Error');
+  }
 });
 
 // Telegram webhook (чтобы не было 409: только один приём обновлений вместо polling)
