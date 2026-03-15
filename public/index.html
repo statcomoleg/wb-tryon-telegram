@@ -804,8 +804,8 @@
             photoshootStatus.classList.add('status-ok');
           } else if (data.error) {
             let errText = data.error;
-            if (/Generation failed|generation failed/i.test(errText)) {
-              errText += ' Попробуйте другие фото внешности или ссылку на товар.';
+            if (/Generation failed|generation failed|NanoBanana API:/i.test(errText)) {
+              errText += ' Попробуйте загрузить внешность по ссылкам на фото (не с устройства) или другой товар.';
             }
             photoshootStatus.textContent = errText;
             photoshootStatus.classList.add('status-error');

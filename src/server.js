@@ -38,12 +38,17 @@ const PUBLIC_APP_URL = (process.env.PUBLIC_APP_URL || process.env.WEBAPP_URL || 
 
 app.get('/api/temp-image/:id', (req, res) => {
   const dataUrl = tempImageStore.get(req.params.id);
-  if (!dataUrl) return res.status(404).send('Not found');
+  if (!dataUrl) {
+    console.warn('[temp-image] 404 id=', req.params.id);
+    return res.status(404).send('Not found');
+  }
   const m = dataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/);
   if (!m) return res.status(400).send('Invalid');
   try {
     res.setHeader('Content-Type', m[1]);
+    res.setHeader('Cache-Control', 'public, max-age=60');
     res.send(Buffer.from(m[2], 'base64'));
+    console.log('[temp-image] 200 id=', req.params.id, 'size=', Buffer.from(m[2], 'base64').length);
   } catch (e) {
     res.status(500).send('Error');
   }

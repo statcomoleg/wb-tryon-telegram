@@ -41,7 +41,7 @@ async function createGenerationTask({ prompt, referenceImages }) {
   const body = {
     prompt,
     imageUrls: Array.isArray(referenceImages) ? referenceImages.slice(0, 8) : [],
-    resolution: process.env.NANO_BANANA_RESOLUTION || '2K',
+    resolution: process.env.NANO_BANANA_RESOLUTION || '1K',
     aspectRatio: process.env.NANO_BANANA_ASPECT_RATIO || '16:9'
   };
   if (body.imageUrls.length === 0) delete body.imageUrls;
@@ -191,8 +191,12 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
       console.warn('NanoBanana: генерация успешна, но в ответе нет URL картинки — показываем фото товара.');
       return fallbackResult('Генерация прошла, но сервис не вернул ссылку на результат. Показаны фото товара.');
     }
+    const isGenFailed = /Generation failed|successFlag|NanoBanana API:/i.test(msg);
+    const hint = isGenFailed
+      ? ' Сервис не смог сгенерировать кадр. Попробуйте: 1) внешность по ссылкам на фото (не с устройства); 2) другой товар или фото.'
+      : '';
     console.error('NanoBanana API failed, returning product images as fallback:', msg);
-    return fallbackResult(msg);
+    return fallbackResult(msg + hint);
   }
 }
 
