@@ -201,6 +201,23 @@ app.post('/api/photoshoot', async (req, res) => {
       return res.status(400).json({ error: 'telegramUserId and product.images[] are required' });
     }
 
+    // Если в product.images только ссылки на страницы (Ozon short link и т.д.) — разрешаем по product.url на бэкенде
+    const isProductPageUrl = (u) =>
+      typeof u === 'string' &&
+      /\b(ozon\.ru\/t\/|ozon\.ru\/product\/|wildberries\.ru\/catalog\/)/i.test(u);
+    let productImages = product.images;
+    if (product.url && productImages.length > 0 && productImages.every(isProductPageUrl)) {
+      try {
+        const analysis = await analyzeProductUrl(product.url);
+        if (analysis.isWearable && Array.isArray(analysis.images) && analysis.images.length > 0) {
+          const resolved = analysis.images.filter((u) => !isProductPageUrl(u));
+          if (resolved.length > 0) productImages = resolved;
+        }
+      } catch (e) {
+        console.warn('[photoshoot] Resolve product images from URL failed:', e?.message);
+      }
+    }
+
     const appearance = sessionStore.getAppearance(telegramUserId);
     if (!appearance) {
       return res.status(400).json({ error: 'Appearance not created yet' });
@@ -215,7 +232,7 @@ app.post('/api/photoshoot', async (req, res) => {
     // Call Nano Banana Pro client to generate a collage / photoshoot
     const generated = await nanoBananaClient.generatePhotoshoot({
       appearance,
-      productImages: product.images,
+      productImages,
       sessionId: session.id
     });
 

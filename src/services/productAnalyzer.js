@@ -182,12 +182,24 @@ async function resolveOzonImageUrls(productUrl) {
       validateStatus: (status) => status === 200
     });
     const html = res.data && typeof res.data === 'string' ? res.data : '';
+    const found = new Set();
+    // Прямые ссылки на CDN в HTML
     const cdnRegex = /https?:\/\/[^"'\s<>]*?cdn\d*\.ozon\.ru[^"'\s<>]*\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s<>]*)?/gi;
     const multiRegex = /https?:\/\/[^"'\s<>]*?multimedia[^"'\s<>]*\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s<>]*)?/gi;
-    const found = new Set();
     let m;
     while ((m = cdnRegex.exec(html)) !== null) found.add(m[0].replace(/["'\s)]+$/, ''));
     while ((m = multiRegex.exec(html)) !== null) found.add(m[0].replace(/["'\s)]+$/, ''));
+    // Часто Ozon кладёт URL в JSON (в скриптах или data-атрибутах)
+    const jsonImageRegex = /https?:\/\/[^"'\s]*?(?:cdn\d*\.ozon\.ru|multimedia[^"'\s]*\.ozon\.ru)[^"'\s]*\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s]*)?/gi;
+    while ((m = jsonImageRegex.exec(html)) !== null) found.add(m[0].replace(/\\u002F/g, '/').replace(/["'\s)]+$/, ''));
+    // Широкий поиск: любой хост *ozon.ru с путём к картинке
+    if (found.size === 0) {
+      const wideOzon = /https?:\/\/[^"'\s<>]*(?:[^/]*\.)?ozon\.ru[^"'\s<>]*\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s<>]*)?/gi;
+      while ((m = wideOzon.exec(html)) !== null) {
+        const u = m[0].replace(/\\u002F/g, '/').replace(/["'\s)]+$/, '');
+        if (!/\.(?:svg|gif|ico)(?:\?|$)/i.test(u)) found.add(u);
+      }
+    }
     const arr = [...found].filter((u) => !/\.(?:svg|gif|ico)(?:\?|$)/i.test(u)).slice(0, 5);
     return arr.length ? arr : [];
   } catch (_) {
