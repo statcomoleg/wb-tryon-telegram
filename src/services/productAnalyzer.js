@@ -165,9 +165,9 @@ async function getWildberriesImageUrlsFromPage(productUrl) {
   }
 }
 
-function getOzonHeaders() {
+function getOzonHeaders(cookie) {
   const base = 'https://www.ozon.ru';
-  return {
+  const h = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
     'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -176,6 +176,18 @@ function getOzonHeaders() {
     'Sec-Fetch-Dest': 'document',
     'Sec-Fetch-Mode': 'navigate'
   };
+  if (cookie) h.Cookie = cookie;
+  return h;
+}
+
+/** Собрать строку Cookie из заголовков Set-Cookie ответа */
+function getCookieString(setCookieHeaders) {
+  if (!setCookieHeaders) return '';
+  const list = Array.isArray(setCookieHeaders) ? setCookieHeaders : [setCookieHeaders];
+  return list
+    .map((c) => (typeof c === 'string' ? c : '').split(';')[0].trim())
+    .filter(Boolean)
+    .join('; ');
 }
 
 /**
@@ -218,10 +230,22 @@ async function resolveOzonImageUrls(productUrl) {
     fetchUrl = fetchUrl.replace(/^https?:\/\/ozon\.ru/i, 'https://www.ozon.ru');
   }
   try {
+    // Сначала запрос на главную Ozon — получаем cookies, как в браузере (часто снимает 403)
+    let cookie = '';
+    try {
+      const homeRes = await axios.get('https://www.ozon.ru/', {
+        timeout: 8000,
+        maxRedirects: 3,
+        headers: getOzonHeaders(),
+        validateStatus: () => true
+      });
+      cookie = getCookieString(homeRes.headers['set-cookie']);
+    } catch (_) {}
+
     let res = await axios.get(fetchUrl, {
       timeout: 12000,
       maxRedirects: 5,
-      headers: getOzonHeaders(),
+      headers: getOzonHeaders(cookie || undefined),
       validateStatus: () => true
     });
     if (res.status === 403 && fetchUrl.includes('www.ozon.ru')) {
@@ -229,14 +253,12 @@ async function resolveOzonImageUrls(productUrl) {
       res = await axios.get(altUrl, {
         timeout: 12000,
         maxRedirects: 5,
-        headers: getOzonHeaders(),
+        headers: getOzonHeaders(cookie || undefined),
         validateStatus: () => true
       });
     }
     if (res.status !== 200) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn('[Ozon] fetch status', res.status, 'url=', fetchUrl.slice(0, 60));
-      }
+      console.warn('[Ozon] fetch status=', res.status, 'url=', fetchUrl.slice(0, 80));
       return [];
     }
     const html = res.data && typeof res.data === 'string' ? res.data : '';
@@ -252,9 +274,11 @@ async function resolveOzonImageUrls(productUrl) {
     // img*.ozon.ru, images.ozon.ru и т.п.
     const imgOzon = /https?:\/\/[^"'\s<>]*?(?:img|images?)\d*\.?ozon\.ru[^"'\s<>]*\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s<>]*)?/gi;
     while ((m = imgOzon.exec(html)) !== null) found.add(normalize(m[0]));
-    // JSON в скриптах (unicode-экранирование)
+    // JSON в скриптах (unicode-экранирование \u002F для /)
     const jsonImageRegex = /https?:\/\/[^"'\s]*?(?:cdn\d*\.ozon\.ru|multimedia[^"'\s]*\.ozon\.ru)[^"'\s]*\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s]*)?/gi;
     while ((m = jsonImageRegex.exec(html)) !== null) found.add(normalize(m[0]));
+    const jsonEscaped = /https?:\\u002[Ff]\\u002[Ff][^"'\s]*?ozon[^"'\s]*?\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s]*)?/gi;
+    while ((m = jsonEscaped.exec(html)) !== null) found.add(normalize(m[0]));
     // Любой поддомен ozon с картинкой
     const wideOzon = /https?:\/\/[^"'\s<>]*(?:[^/]*\.)?ozon\.ru[^"'\s<>]*\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s<>]*)?/gi;
     while ((m = wideOzon.exec(html)) !== null) {
@@ -271,14 +295,12 @@ async function resolveOzonImageUrls(productUrl) {
     }
 
     const arr = [...found].filter((u) => !/\.(?:svg|gif|ico)(?:\?|$)/i.test(u)).slice(0, 5);
-    if (arr.length === 0 && process.env.NODE_ENV !== 'production' && html.length > 100) {
-      console.warn('[Ozon] no image URLs found, html length=', html.length);
+    if (arr.length === 0) {
+      console.warn('[Ozon] no image URLs in page, html length=', html.length, 'url=', fetchUrl.slice(0, 70));
     }
     return arr.length ? arr : [];
   } catch (e) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn('[Ozon] resolveOzonImageUrls error:', e?.message || e);
-    }
+    console.warn('[Ozon] error:', e?.message || e);
     return [];
   }
 }
