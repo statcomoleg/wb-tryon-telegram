@@ -100,7 +100,45 @@ async function resolveWildberriesImageUrls(productUrl) {
     const urls = await tryDomain(domain, pathPartPlain);
     if (urls && urls.length) return urls;
   }
+
+  const fromPage = await getWildberriesImageUrlsFromPage(productUrl);
+  if (fromPage.length) return fromPage;
+
   return [makeUrl('wb.ru', pathPartBig, 1)];
+}
+
+/**
+ * Запасной вариант: загрузить страницу товара WB и вытащить URL картинок из HTML.
+ */
+async function getWildberriesImageUrlsFromPage(productUrl) {
+  try {
+    const res = await axios.get(productUrl, {
+      timeout: 10000,
+      maxRedirects: 5,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml',
+        'Accept-Language': 'ru-RU,ru;q=0.9'
+      },
+      validateStatus: (s) => s === 200
+    });
+    const html = (res.data && typeof res.data === 'string') ? res.data : '';
+    const found = new Set();
+    const re = /https?:\/\/[^"'\s<>]*?basket-\d+\.(?:wb\.ru|wbbasket\.ru)[^"'\s<>]*\.(?:webp|jpg|jpeg|png)(?:\?[^"'\s<>]*)?/gi;
+    let m;
+    while ((m = re.exec(html)) !== null) found.add(m[0].replace(/["'\s)]+$/, ''));
+    const arr = [...found].slice(0, 5);
+    const verified = [];
+    for (const u of arr) {
+      try {
+        const r = await axios.head(u, { timeout: 4000, validateStatus: () => true, maxRedirects: 2 });
+        if (r.status === 200) verified.push(u);
+      } catch (_) {}
+    }
+    return verified;
+  } catch (_) {
+    return [];
+  }
 }
 
 /**
