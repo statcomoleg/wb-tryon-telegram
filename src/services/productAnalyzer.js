@@ -165,20 +165,52 @@ async function getWildberriesImageUrlsFromPage(productUrl) {
   }
 }
 
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8'
+};
+
+/**
+ * Разрешить короткую ссылку Ozon (ozon.ru/t/xxx) в полную (ozon.ru/product/...).
+ * Запрос без следования редиректу — читаем Location и возвращаем полный URL.
+ */
+async function resolveOzonShortLink(shortUrl) {
+  try {
+    const res = await axios.get(shortUrl, {
+      timeout: 8000,
+      maxRedirects: 0,
+      headers: BROWSER_HEADERS,
+      validateStatus: (s) => s === 200 || s === 301 || s === 302
+    });
+    if (res.status === 301 || res.status === 302) {
+      const location = res.headers.location;
+      if (location && typeof location === 'string') {
+        const full = url.resolve(shortUrl, location.trim());
+        if (/ozon\.ru\/product\//i.test(full)) return full;
+      }
+    }
+  } catch (_) {
+    // 403, сеть и т.д. — не получилось разрешить
+  }
+  return null;
+}
+
 /**
  * Получить URL картинок товара Ozon: загрузка страницы и извлечение ссылок на изображения с CDN.
- * Поддерживаются полные ссылки (/product/123) и короткие (/t/xxx) — редирект отрабатывает автоматически.
+ * Короткие ссылки (ozon.ru/t/xxx) сначала разрешаются в полные по редиректу, затем грузится страница товара.
  */
 async function resolveOzonImageUrls(productUrl) {
+  let fetchUrl = productUrl;
+  if (/ozon\.ru\/t\//i.test(productUrl)) {
+    const fullUrl = await resolveOzonShortLink(productUrl);
+    if (fullUrl) fetchUrl = fullUrl;
+  }
   try {
-    const res = await axios.get(productUrl, {
+    const res = await axios.get(fetchUrl, {
       timeout: 10000,
       maxRedirects: 5,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8'
-      },
+      headers: BROWSER_HEADERS,
       validateStatus: (status) => status === 200
     });
     const html = res.data && typeof res.data === 'string' ? res.data : '';
@@ -242,6 +274,18 @@ async function analyzeProductUrl(productUrl) {
     if (images.length === 0) images = getWildberriesImageUrls(productUrl);
   } else if (host.includes('ozon')) {
     images = await resolveOzonImageUrls(productUrl);
+    if (images.length === 0) {
+      const isShortLink = /ozon\.ru\/t\//i.test(productUrl);
+      return {
+        isWearable: true,
+        productUrl,
+        title: null,
+        images: [],
+        imageFetchHint: isShortLink
+          ? 'По короткой ссылке Ozon фото загрузить не удалось. Откройте карточку товара в браузере на ozon.ru и вставьте полную ссылку («Поделиться» → «Скопировать ссылку»).'
+          : 'Не удалось загрузить фото товара с Ozon. Попробуйте другую ссылку или откройте товар на ozon.ru и скопируйте ссылку из браузера.'
+      };
+    }
   }
   if (images.length === 0) {
     images = [productUrl];

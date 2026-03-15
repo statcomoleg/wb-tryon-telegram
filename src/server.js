@@ -197,25 +197,33 @@ app.post('/api/photoshoot', async (req, res) => {
   try {
     const { telegramUserId, product, sessionId } = req.body || {};
 
-    if (!telegramUserId || !product || !Array.isArray(product.images) || product.images.length === 0) {
-      return res.status(400).json({ error: 'telegramUserId and product.images[] are required' });
+    if (!telegramUserId || !product) {
+      return res.status(400).json({ error: 'telegramUserId and product are required' });
     }
-
-    // Если в product.images только ссылки на страницы (Ozon short link и т.д.) — разрешаем по product.url на бэкенде
     const isProductPageUrl = (u) =>
       typeof u === 'string' &&
       /\b(ozon\.ru\/t\/|ozon\.ru\/product\/|wildberries\.ru\/catalog\/)/i.test(u);
-    let productImages = product.images;
-    if (product.url && productImages.length > 0 && productImages.every(isProductPageUrl)) {
+    let productImages = Array.isArray(product.images) ? product.images : [];
+
+    // Разрешаем картинки по product.url, если пришли только ссылки на страницы или пустой массив (Ozon короткая ссылка)
+    if (product.url && (productImages.length === 0 || productImages.every(isProductPageUrl))) {
       try {
         const analysis = await analyzeProductUrl(product.url);
         if (analysis.isWearable && Array.isArray(analysis.images) && analysis.images.length > 0) {
           const resolved = analysis.images.filter((u) => !isProductPageUrl(u));
           if (resolved.length > 0) productImages = resolved;
         }
+        if (productImages.length === 0 && analysis.imageFetchHint) {
+          return res.status(400).json({ error: analysis.imageFetchHint });
+        }
       } catch (e) {
         console.warn('[photoshoot] Resolve product images from URL failed:', e?.message);
       }
+    }
+    if (productImages.length === 0) {
+      return res.status(400).json({
+        error: 'Нет фото товара. Нажмите «Проверить товар и подготовить фото» или вставьте полную ссылку на карточку Ozon с сайта.'
+      });
     }
 
     const appearance = sessionStore.getAppearance(telegramUserId);

@@ -717,8 +717,13 @@
           });
 
           lastAnalysis = data;
-          productStatus.textContent = 'Товар выглядит как одежда/аксессуар. Можно запускать фотосессию.';
-          productStatus.classList.add('status-ok');
+          if (data.images && data.images.length === 0 && data.imageFetchHint) {
+            productStatus.textContent = data.imageFetchHint;
+            productStatus.classList.add('status-error');
+          } else {
+            productStatus.textContent = 'Товар выглядит как одежда/аксессуар. Можно запускать фотосессию.';
+            productStatus.classList.add('status-ok');
+          }
         } catch (err) {
           productStatus.textContent = err.message || 'Не удалось проанализировать товар.';
           productStatus.classList.add('status-error');
@@ -742,9 +747,11 @@
           if (productUrl !== raw) productUrlInput.value = productUrl;
 
           const images =
-            (lastAnalysis && lastAnalysis.images && lastAnalysis.images.length
+            lastAnalysis && lastAnalysis.images && lastAnalysis.images.length
               ? lastAnalysis.images
-              : [productUrl]);
+              : lastAnalysis && lastAnalysis.imageFetchHint
+                ? []
+                : [productUrl];
 
           const data = await callApi('/api/photoshoot', {
             body: {
