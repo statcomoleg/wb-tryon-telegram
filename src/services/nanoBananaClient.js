@@ -184,7 +184,23 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
 
   const personRefs = appearance?.referenceImages || [];
   const productRefs = Array.isArray(productImages) ? productImages.slice(0, 2) : [];
-  const garmentUrls = productRefs.length >= 2 ? productRefs : productRefs.length === 1 ? [productRefs[0], productRefs[0]] : [];
+  // Не передаём в API ссылки на страницы товара — только URL картинок (CDN, data: и т.д.)
+  const isProductPageUrl = (u) =>
+    typeof u === 'string' &&
+    !u.startsWith('data:image/') &&
+    /\b(ozon\.ru\/t\/|ozon\.ru\/product\/|wildberries\.ru\/catalog\/)/i.test(u);
+  const productRefsFiltered = productRefs.filter((u) => !isProductPageUrl(u));
+  const garmentUrls =
+    productRefsFiltered.length >= 2
+      ? productRefsFiltered.slice(0, 2)
+      : productRefsFiltered.length === 1
+        ? [productRefsFiltered[0], productRefsFiltered[0]]
+        : [];
+  if (garmentUrls.length === 0) {
+    return fallbackResult(
+      'Нет фото товара для примерки. Нажмите «Проверить товар и подготовить фото», дождитесь успешной проверки и снова запустите фотосессию.'
+    );
+  }
   let referenceImages = [...personRefs, ...garmentUrls].slice(0, 8);
 
   const baseAppUrl = (process.env.PUBLIC_APP_URL || process.env.WEBAPP_URL || '').replace(/\/webapp\/?$/, '').replace(/\/+$/, '');

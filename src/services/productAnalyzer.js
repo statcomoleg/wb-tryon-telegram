@@ -167,13 +167,9 @@ async function getWildberriesImageUrlsFromPage(productUrl) {
 
 /**
  * Получить URL картинок товара Ozon: загрузка страницы и извлечение ссылок на изображения с CDN.
+ * Поддерживаются полные ссылки (/product/123) и короткие (/t/xxx) — редирект отрабатывает автоматически.
  */
 async function resolveOzonImageUrls(productUrl) {
-  const parsed = url.parse(productUrl);
-  const pathname = (parsed.pathname || '');
-  const match = pathname.match(/\/product\/(\d+)/);
-  if (!match) return [];
-
   try {
     const res = await axios.get(productUrl, {
       timeout: 10000,
