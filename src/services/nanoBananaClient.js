@@ -129,20 +129,24 @@ async function waitForTaskResult(taskId, { pollIntervalMs = 3000, timeoutMs = 12
         resp?.originImageUrl ||
         resp?.imageUrl ||
         resp?.url ||
+        resp?.outputImageUrl ||
+        resp?.output?.url ||
+        (Array.isArray(resp?.output) && resp.output[0] && (resp.output[0].url || resp.output[0])) ||
         data?.resultImageUrl ||
         data?.originImageUrl ||
+        data?.imageUrl ||
+        data?.url ||
         (Array.isArray(resp?.images) && (resp.images[0]?.url || resp.images[0])) ||
         (Array.isArray(data?.images) && (data.images[0]?.url || data.images[0])) ||
         (typeof resp === 'string' && resp.startsWith('http') ? resp : null);
       if (resultUrl) return [resultUrl];
-      let raw;
-      try {
-        raw = JSON.stringify({ data, response: resp }).slice(0, 800);
-      } catch (e) {
-        raw = String(resp).slice(0, 200);
-      }
-      console.error('[NanoBanana] ОТВЕТ API (success, URL не найден): ' + raw);
-      console.log('[NanoBanana] ОТВЕТ API (success, URL не найден): ' + raw);
+      const full = { data, res };
+      const str = JSON.stringify(full);
+      const urlMatch = str.match(/https?:\/\/[^\s"']+\.(?:jpg|jpeg|png|webp)(?:\?[^\s"']*)?/i) ||
+        str.match(/https?:\/\/[^\s"']+(?:\/result|\/output|\/generated)[^\s"']*/i);
+      if (urlMatch && urlMatch[0]) return [urlMatch[0]];
+      const raw = str.slice(0, 800);
+      console.warn('[NanoBanana] success, URL не найден в ожидаемых полях:', raw);
       throw new Error('NanoBanana API: success but no image URL in response');
     }
     if (successFlag === 2 || successFlag === 3) {
@@ -212,16 +216,21 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
     }).filter(Boolean);
   }
 
-  // Проксируем картинки Ozon: CDN отдаёт 403 при запросе с сервера NanoBanana, поэтому качаем на наш бэкенд и отдаём temp URL
-  if (baseAppUrl && referenceImages.some((u) => typeof u === 'string' && /ozon\.ru/i.test(u))) {
+  // Проксируем картинки маркетплейсов: CDN может отдавать 403 при запросе с сервера NanoBanana
+  const needsProxy = (u) =>
+    typeof u === 'string' &&
+    !u.startsWith('data:image/') &&
+    !u.includes(baseAppUrl || '') &&
+    (/ozon\.ru/i.test(u) || /\.wb\.ru|wbcontent\.net|wildberries/i.test(u));
+  if (baseAppUrl && referenceImages.some(needsProxy)) {
     referenceImages = await Promise.all(
       referenceImages.map(async (url) => {
-        if (typeof url !== 'string' || !/ozon\.ru/i.test(url)) return url;
+        if (!needsProxy(url)) return url;
         try {
           const proxied = await proxyImageUrl(url, baseAppUrl);
           return proxied || url;
         } catch (e) {
-          console.warn('[nanoBanana] Ozon proxy failed for', url.slice(0, 80), e?.message);
+          console.warn('[nanoBanana] proxy failed for', url.slice(0, 60), e?.message);
           return url;
         }
       })
