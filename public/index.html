@@ -178,6 +178,36 @@
         justify-content: center;
       }
 
+      .tabs {
+        display: flex;
+        gap: 0;
+        margin-bottom: 14px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+      }
+      .tab {
+        padding: 10px 16px;
+        font-size: 14px;
+        background: none;
+        border: none;
+        color: var(--muted);
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
+      }
+      .tab:hover {
+        color: var(--text);
+      }
+      .tab.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+      }
+      .tab-panel {
+        margin-top: 4px;
+      }
+      .tab-panel.hidden {
+        display: none;
+      }
+
       .row {
         display: flex;
         gap: 10px;
@@ -410,23 +440,29 @@
       </div>
 
       <div class="card" id="step-product">
-        <div class="section-title">2. Ссылка на товар</div>
-        <div class="section-caption">
-          Вставьте ссылку на карточку товара Wildberries или Ozon (одежда или аксессуар).
+        <div class="section-title">2. Товар для примерки</div>
+        <div class="tabs" role="tablist">
+          <button type="button" class="tab active" id="tab-card" role="tab" aria-selected="true">Карточка WB/Ozon</button>
+          <button type="button" class="tab" id="tab-manual" role="tab" aria-selected="false">Загрузить вручную</button>
         </div>
-        <label for="product-url">URL карточки товара</label>
-        <input id="product-url" type="text" placeholder="https://www.wildberries.ru/..." />
-        <div class="row" style="margin-top: 10px">
-          <button class="btn btn-full" id="btn-analyze-product">
-            Проверить товар и подготовить фото
-          </button>
+        <div id="panel-card" class="tab-panel" role="tabpanel">
+          <div class="section-caption">Вставьте ссылку на карточку товара Wildberries или Ozon.</div>
+          <label for="product-url">URL карточки товара</label>
+          <input id="product-url" type="text" placeholder="https://www.wildberries.ru/..." />
+          <div class="row" style="margin-top: 10px">
+            <button class="btn btn-full" id="btn-analyze-product">Проверить товар и подготовить фото</button>
+          </div>
+          <div class="status" id="product-status"></div>
         </div>
-        <div class="status" id="product-status"></div>
-        <div class="section-caption" style="margin-top: 14px; font-size: 0.9em; color: var(--muted);">
-          Если фото не подгрузились (часто с Ozon): откройте карточку товара в браузере, нажмите правой кнопкой по фото → «Копировать адрес изображения». Вставьте ссылки ниже (каждую с новой строки).
+        <div id="panel-manual" class="tab-panel hidden" role="tabpanel">
+          <div class="section-caption">Вставьте прямые ссылки на фото товара (правый клик по фото на карточке → Копировать адрес изображения). Каждую ссылку — с новой строки.</div>
+          <label for="product-image-urls">Ссылки на изображения</label>
+          <textarea id="product-image-urls" placeholder="https://cdn...ozon.ru/.../1.jpg&#10;https://cdn...ozon.ru/.../2.jpg" rows="4" style="width: 100%; margin-top: 4px; resize: vertical;"></textarea>
+          <div class="row" style="margin-top: 10px">
+            <button class="btn btn-full" id="btn-check-manual">Проверить ссылки</button>
+          </div>
+          <div class="status" id="manual-status"></div>
         </div>
-        <label for="product-image-urls" style="margin-top: 8px;">Ссылки на фото товара вручную</label>
-        <textarea id="product-image-urls" placeholder="https://cdn...ozon.ru/.../1.jpg&#10;https://cdn...ozon.ru/.../2.jpg" rows="3" style="width: 100%; margin-top: 4px; resize: vertical;"></textarea>
       </div>
 
       <div class="card" id="step-photoshoot">
@@ -511,6 +547,34 @@
       const productImageUrlsInput = document.getElementById('product-image-urls');
       const productStatus = document.getElementById('product-status');
       const btnAnalyzeProduct = document.getElementById('btn-analyze-product');
+      const tabCard = document.getElementById('tab-card');
+      const tabManual = document.getElementById('tab-manual');
+      const panelCard = document.getElementById('panel-card');
+      const panelManual = document.getElementById('panel-manual');
+      const btnCheckManual = document.getElementById('btn-check-manual');
+      const manualStatus = document.getElementById('manual-status');
+
+      let productMode = 'card';
+      let manualImagesValid = false;
+
+      tabCard.addEventListener('click', () => {
+        productMode = 'card';
+        tabCard.classList.add('active');
+        tabCard.setAttribute('aria-selected', 'true');
+        tabManual.classList.remove('active');
+        tabManual.setAttribute('aria-selected', 'false');
+        panelCard.classList.remove('hidden');
+        panelManual.classList.add('hidden');
+      });
+      tabManual.addEventListener('click', () => {
+        productMode = 'manual';
+        tabManual.classList.add('active');
+        tabManual.setAttribute('aria-selected', 'true');
+        tabCard.classList.remove('active');
+        tabCard.setAttribute('aria-selected', 'false');
+        panelManual.classList.remove('hidden');
+        panelCard.classList.add('hidden');
+      });
 
       /** Из вставленного текста (название + ссылка с «Поделиться» WB/Ozon) оставить только URL карточки. */
       function extractProductUrl(text) {
@@ -736,34 +800,81 @@
         }
       });
 
+      function parseManualImageUrls() {
+        return (productImageUrlsInput?.value || '')
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 10 && /^https?:\/\//i.test(s));
+      }
+      function looksLikeImageUrl(u) {
+        const lower = (u || '').toLowerCase();
+        return /\.(jpe?g|png|webp|gif)(\?|$)/i.test(lower) || lower.includes('/images/') || lower.startsWith('data:image/');
+      }
+
+      btnCheckManual.addEventListener('click', () => {
+        manualStatus.className = 'status';
+        const urls = parseManualImageUrls();
+        const imageUrls = urls.filter(looksLikeImageUrl);
+        if (urls.length === 0) {
+          manualStatus.textContent = 'Вставьте хотя бы одну ссылку на изображение.';
+          manualStatus.classList.add('status-error');
+          manualImagesValid = false;
+          return;
+        }
+        if (imageUrls.length === 0) {
+          manualStatus.textContent = 'Ссылки должны вести на изображения (.jpg, .png, .webp или содержать /images/).';
+          manualStatus.classList.add('status-error');
+          manualImagesValid = false;
+          return;
+        }
+        manualImagesValid = true;
+        manualStatus.textContent = 'Готово. Можно запускать фотосессию.';
+        manualStatus.classList.add('status-ok');
+      });
+
+      productImageUrlsInput.addEventListener('input', () => { manualImagesValid = false; });
+
       btnGeneratePhotos.addEventListener('click', async () => {
         photoshootStatus.textContent = 'Генерируем фотосессию...';
         photoshootStatus.className = 'status';
         photoshootGallery.innerHTML = '';
         try {
           const telegramUserId = getTelegramUserId();
-          const raw = productUrlInput.value.trim();
-          const productUrl = extractProductUrl(raw) || raw;
+          let productUrl = '';
+          let images = [];
+          let title = null;
 
-          if (!productUrl) {
-            photoshootStatus.textContent = 'Сначала вставьте ссылку на карточку товара.';
-            photoshootStatus.classList.add('status-error');
-            return;
-          }
-          if (productUrl !== raw) productUrlInput.value = productUrl;
-
-          const manualUrls = (productImageUrlsInput?.value || '')
-            .split(/\r?\n/)
-            .map((s) => s.trim())
-            .filter((s) => s.length > 10 && /^https?:\/\//i.test(s));
-          const images =
-            manualUrls.length > 0
-              ? manualUrls.slice(0, 5)
-              : lastAnalysis && lastAnalysis.images && lastAnalysis.images.length
+          if (productMode === 'manual') {
+            if (!manualImagesValid) {
+              photoshootStatus.textContent = 'Перейдите во вкладку «Загрузить вручную», вставьте ссылки на фото и нажмите «Проверить ссылки».';
+              photoshootStatus.classList.add('status-error');
+              return;
+            }
+            images = parseManualImageUrls().filter(looksLikeImageUrl).slice(0, 5);
+            if (images.length === 0) {
+              photoshootStatus.textContent = 'Нет подходящих ссылок на изображения. Нажмите «Проверить ссылки» снова.';
+              photoshootStatus.classList.add('status-error');
+              return;
+            }
+            productUrl = images[0] || '';
+            title = 'Фото вручную';
+          } else {
+            const raw = productUrlInput.value.trim();
+            productUrl = extractProductUrl(raw) || raw;
+            if (!productUrl) {
+              photoshootStatus.textContent = 'Вставьте ссылку на карточку товара или перейдите во вкладку «Загрузить вручную».';
+              photoshootStatus.classList.add('status-error');
+              return;
+            }
+            if (productUrl !== raw) productUrlInput.value = productUrl;
+            images =
+              lastAnalysis && lastAnalysis.images && lastAnalysis.images.length
                 ? lastAnalysis.images
                 : lastAnalysis && lastAnalysis.imageFetchHint
                   ? []
                   : [productUrl];
+            title = lastAnalysis?.title || null;
+          }
 
           const data = await callApi('/api/photoshoot', {
             body: {
@@ -771,7 +882,7 @@
               sessionId: currentSessionId || undefined,
               product: {
                 url: productUrl,
-                title: lastAnalysis?.title || null,
+                title,
                 images
               }
             }
