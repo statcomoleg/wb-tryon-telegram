@@ -422,6 +422,11 @@
           </button>
         </div>
         <div class="status" id="product-status"></div>
+        <div class="section-caption" style="margin-top: 14px; font-size: 0.9em; color: var(--muted);">
+          Если фото не подгрузились (часто с Ozon): откройте карточку товара в браузере, нажмите правой кнопкой по фото → «Копировать адрес изображения». Вставьте ссылки ниже (каждую с новой строки).
+        </div>
+        <label for="product-image-urls" style="margin-top: 8px;">Ссылки на фото товара вручную</label>
+        <textarea id="product-image-urls" placeholder="https://cdn...ozon.ru/.../1.jpg&#10;https://cdn...ozon.ru/.../2.jpg" rows="3" style="width: 100%; margin-top: 4px; resize: vertical;"></textarea>
       </div>
 
       <div class="card" id="step-photoshoot">
@@ -503,6 +508,7 @@
       const btnSaveAvatar = document.getElementById('btn-save-avatar');
 
       const productUrlInput = document.getElementById('product-url');
+      const productImageUrlsInput = document.getElementById('product-image-urls');
       const productStatus = document.getElementById('product-status');
       const btnAnalyzeProduct = document.getElementById('btn-analyze-product');
 
@@ -746,12 +752,18 @@
           }
           if (productUrl !== raw) productUrlInput.value = productUrl;
 
+          const manualUrls = (productImageUrlsInput?.value || '')
+            .split(/\r?\n/)
+            .map((s) => s.trim())
+            .filter((s) => s.length > 10 && /^https?:\/\//i.test(s));
           const images =
-            lastAnalysis && lastAnalysis.images && lastAnalysis.images.length
-              ? lastAnalysis.images
-              : lastAnalysis && lastAnalysis.imageFetchHint
-                ? []
-                : [productUrl];
+            manualUrls.length > 0
+              ? manualUrls.slice(0, 5)
+              : lastAnalysis && lastAnalysis.images && lastAnalysis.images.length
+                ? lastAnalysis.images
+                : lastAnalysis && lastAnalysis.imageFetchHint
+                  ? []
+                  : [productUrl];
 
           const data = await callApi('/api/photoshoot', {
             body: {
