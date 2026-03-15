@@ -75,19 +75,21 @@ async function resolveWildberriesImageUrls(productUrl) {
 
   const pathPartBig = `vol${vol}/part${part}/${nmId}/images/big/`;
   const pathPartPlain = `vol${vol}/part${part}/${nmId}/images/`;
-  const testUrl = (domain, pathPart) => `https://basket-${hostNum}.${domain}/${pathPart}1.webp`;
+  const makeUrl = (domain, pathPart, n) => `https://basket-${hostNum}.${domain}/${pathPart}${n}.webp`;
 
   const tryDomain = async (domain, pathPart) => {
-    try {
-      const res = await axios.head(testUrl(domain, pathPart), {
-        timeout: 6000,
-        validateStatus: () => true,
-        maxRedirects: 3
-      });
-      return res.status === 200 ? [1, 2, 3].map((n) => `https://basket-${hostNum}.${domain}/${pathPart}${n}.webp`) : null;
-    } catch (_) {
-      return null;
+    const found = [];
+    for (let n = 1; n <= 3; n++) {
+      try {
+        const res = await axios.head(makeUrl(domain, pathPart, n), {
+          timeout: 6000,
+          validateStatus: () => true,
+          maxRedirects: 3
+        });
+        if (res.status === 200) found.push(makeUrl(domain, pathPart, n));
+      } catch (_) {}
     }
+    return found.length ? found : null;
   };
 
   for (const domain of ['wb.ru', 'wbbasket.ru']) {
@@ -98,7 +100,7 @@ async function resolveWildberriesImageUrls(productUrl) {
     const urls = await tryDomain(domain, pathPartPlain);
     if (urls && urls.length) return urls;
   }
-  return [1, 2, 3].map((n) => `https://basket-${hostNum}.wb.ru/${pathPartBig}${n}.webp`);
+  return [makeUrl('wb.ru', pathPartBig, 1)];
 }
 
 /**

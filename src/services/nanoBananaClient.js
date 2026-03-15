@@ -5,12 +5,11 @@ const { tempImageStore } = require('./tempImageStore');
 const NANO_BANANA_API_KEY = (process.env.NANO_BANANA_API_KEY || '').trim();
 const NANO_BANANA_BASE_URL = (process.env.NANO_BANANA_BASE_URL || 'https://api.nanobananaapi.ai').replace(/\/+$/, '');
 
-// Упрощённый промпт: только кто человек, что одежда, один кадр. Меньше текста = меньше шанс successFlag=3.
-// Полный вариант (локация ПРИМЕРЯЙКА, ракурсы, стиль) — через NANO_BANANA_PROMPT в Environment.
-// Плейсхолдеры: {personCount}, {productCount}.
+// Промпт: кто человек, что одежда, один кадр или коллаж. Плейсхолдеры: {personCount}, {productCount}.
+// Полный вариант (ПРИМЕРЯЙКА, ракурсы) — через NANO_BANANA_PROMPT в Environment.
 const DEFAULT_TRYON_PROMPT =
   'First {personCount} images = the person (use only this face and body). Last {productCount} images = the garment. ' +
-  'Put the garment on this person. One photorealistic photo, neutral background.';
+  'Put the garment on this person. One photorealistic 16:9 image, neutral background. If possible, show several angles or frames in one collage.';
 const NANO_BANANA_PROMPT = (process.env.NANO_BANANA_PROMPT || '').trim() || null;
 
 function getAuthHeaders() {
