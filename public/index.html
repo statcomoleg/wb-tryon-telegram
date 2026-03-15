@@ -247,6 +247,15 @@
         gap: 6px;
         font-size: 12px;
         color: var(--muted);
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 4px 6px;
+        border-radius: 8px;
+        font-family: inherit;
+      }
+      .stepper-item:hover {
+        color: var(--text);
       }
       .stepper-item.active {
         color: var(--accent);
@@ -508,6 +517,28 @@
         font-size: 10px;
         color: #a5b4fc;
       }
+      .screen {
+        display: none;
+      }
+      .screen.active {
+        display: block;
+      }
+      .screen-nav {
+        display: flex;
+        gap: 10px;
+        margin-top: 18px;
+      }
+      .screen-nav .btn-back {
+        background: rgba(15, 23, 42, 0.9);
+        color: var(--muted);
+        border: 1px solid rgba(148, 163, 184, 0.4);
+      }
+      .screen-nav .btn-back:hover {
+        color: var(--text);
+      }
+      .screen-nav .btn-next {
+        flex: 1;
+      }
     </style>
   </head>
   <body>
@@ -533,83 +564,87 @@
             beta
           </div>
         </div>
-        <div class="stepper">
-          <div class="stepper-item active"><span class="stepper-num">1</span> Ваше фото</div>
+        <div class="stepper" id="stepper">
+          <button type="button" class="stepper-item active" data-step="1"><span class="stepper-num">1</span> Ваше фото</button>
           <div class="stepper-line"></div>
-          <div class="stepper-item"><span class="stepper-num">2</span> Товар</div>
+          <button type="button" class="stepper-item" data-step="2"><span class="stepper-num">2</span> Товар</button>
           <div class="stepper-line"></div>
-          <div class="stepper-item"><span class="stepper-num">3</span> Генерация</div>
+          <button type="button" class="stepper-item" data-step="3"><span class="stepper-num">3</span> Генерация</button>
         </div>
       </div>
 
-      <div class="card step-card" id="step-avatar">
-        <div class="step-label">Шаг 1</div>
-        <div class="section-title">Ваше фото для примерки</div>
-        <div class="section-caption">Добавьте до 3 своих фото (лицо/фигура) — с устройства или по ссылкам.</div>
-        <input id="avatar-files" type="file" accept="image/*" multiple class="input-file-hidden" />
-        <label for="avatar-files" class="btn btn-upload btn-full">
-          <span class="btn-upload-icon">📷</span>
-          <span>Выбрать фото с устройства (макс. 3)</span>
-        </label>
-        <div class="hint" id="avatar-files-hint">Файлы не выбраны</div>
-        <div class="section-caption" style="margin-top: 12px;">Или вставьте ссылки на фото (каждая с новой строки)</div>
-        <textarea id="avatar-urls" placeholder="https://..."></textarea>
-        <button type="button" class="btn btn-primary btn-full" id="btn-save-avatar">
-          Сохранить внешность
-        </button>
-        <div class="status" id="avatar-status"></div>
-      </div>
-
-      <div class="card step-card" id="step-product">
-        <div class="step-label">Шаг 2</div>
-        <div class="section-title">Товар для примерки</div>
-        <div class="tabs" role="tablist">
-          <button type="button" class="tab active" id="tab-manual" role="tab" aria-selected="true">Загрузить вручную</button>
-          <button type="button" class="tab" id="tab-card" role="tab" aria-selected="false">Карточка WB</button>
-        </div>
-        <div id="panel-manual" class="tab-panel" role="tabpanel">
-          <div class="section-caption">До 3 фото товара: кнопкой ниже или ссылками в поле.</div>
-          <input id="product-image-files" type="file" accept="image/*" multiple class="input-file-hidden" />
-          <label for="product-image-files" class="btn btn-upload btn-full">
-            <span class="btn-upload-icon">🖼</span>
-            <span>Добавить фото товара (макс. 3)</span>
+      <div class="screen active" id="screen-1" data-step="1">
+        <div class="card step-card">
+          <div class="step-label">Шаг 1</div>
+          <div class="section-title">Ваше фото для примерки</div>
+          <div class="section-caption">Добавьте до 3 своих фото (лицо/фигура) — с устройства или по ссылкам.</div>
+          <input id="avatar-files" type="file" accept="image/*" multiple class="input-file-hidden" />
+          <label for="avatar-files" class="btn btn-upload btn-full">
+            <span class="btn-upload-icon">📷</span>
+            <span>Выбрать фото с устройства (макс. 3)</span>
           </label>
-          <div class="product-previews" id="product-image-previews"></div>
-          <label for="product-image-urls" class="label-secondary">Или ссылки на изображения (каждая с новой строки)</label>
-          <textarea id="product-image-urls" placeholder="https://..."></textarea>
-          <button type="button" class="btn btn-primary btn-full" id="btn-check-manual">Готово, перейти к генерации</button>
+          <div class="hint" id="avatar-files-hint">Файлы не выбраны</div>
+          <div class="section-caption" style="margin-top: 12px;">Или вставьте ссылки на фото (каждая с новой строки)</div>
+          <textarea id="avatar-urls" placeholder="https://..."></textarea>
+          <div class="screen-nav">
+            <button type="button" class="btn btn-primary btn-full" id="btn-next-1">Далее</button>
+          </div>
+          <div class="status" id="avatar-status"></div>
+        </div>
+      </div>
+
+      <div class="screen" id="screen-2" data-step="2">
+        <div class="card step-card">
+          <div class="step-label">Шаг 2</div>
+          <div class="section-title">Товар для примерки</div>
+          <div class="tabs" role="tablist">
+            <button type="button" class="tab active" id="tab-manual" role="tab" aria-selected="true">Загрузить вручную</button>
+            <button type="button" class="tab" id="tab-card" role="tab" aria-selected="false">Карточка WB</button>
+          </div>
+          <div id="panel-manual" class="tab-panel" role="tabpanel">
+            <div class="section-caption">До 3 фото товара: кнопкой или ссылками ниже.</div>
+            <input id="product-image-files" type="file" accept="image/*" multiple class="input-file-hidden" />
+            <label for="product-image-files" class="btn btn-upload btn-full">
+              <span class="btn-upload-icon">🖼</span>
+              <span>Добавить фото товара (макс. 3)</span>
+            </label>
+            <div class="product-previews" id="product-image-previews"></div>
+            <label for="product-image-urls" class="label-secondary">Или ссылки на изображения (каждая с новой строки)</label>
+            <textarea id="product-image-urls" placeholder="https://..."></textarea>
+          </div>
+          <div id="panel-card" class="tab-panel hidden" role="tabpanel">
+            <div class="section-caption">Ссылка на карточку товара Wildberries.</div>
+            <input id="product-url" type="text" placeholder="https://www.wildberries.ru/catalog/..." />
+            <div class="status" id="product-status"></div>
+          </div>
+          <div class="screen-nav">
+            <button type="button" class="btn btn-back btn-primary" id="btn-back-2">Назад</button>
+            <button type="button" class="btn btn-primary btn-full btn-next" id="btn-next-2">Далее</button>
+          </div>
           <div class="status" id="manual-status"></div>
         </div>
-        <div id="panel-card" class="tab-panel hidden" role="tabpanel">
-          <div class="section-caption">Ссылка на карточку товара Wildberries.</div>
-          <input id="product-url" type="text" placeholder="https://www.wildberries.ru/catalog/..." />
-          <button type="button" class="btn btn-primary btn-full" id="btn-analyze-product">Проверить товар и подготовить фото</button>
-          <div class="status" id="product-status"></div>
-        </div>
       </div>
 
-      <div class="card step-card" id="step-photoshoot">
-        <div class="step-label">Шаг 3</div>
-        <div class="section-title">Генерация фотосессии</div>
-        <div class="section-caption">На основе вашего фото и фото товара будет сгенерирована примерка.</div>
-        <button type="button" class="btn btn-primary btn-full btn-generate" id="btn-generate-photos">
-          Запустить генерацию
-        </button>
-        <div class="status" id="photoshoot-status"></div>
-        <div class="gallery" id="photoshoot-gallery"></div>
-      </div>
-
-      <div class="card" id="step-sessions">
-        <div class="section-title">Ваши сессии</div>
-        <div class="section-caption">
-          Список недавних фотосессий. Можно открыть текущую и добавить ещё вещи.
+      <div class="screen" id="screen-3" data-step="3">
+        <div class="card step-card">
+          <div class="step-label">Шаг 3</div>
+          <div class="section-title">Генерация фотосессии</div>
+          <div class="section-caption">На основе вашего фото и фото товара будет сгенерирована примерка.</div>
+          <div class="screen-nav">
+            <button type="button" class="btn btn-back btn-primary" id="btn-back-3">Назад</button>
+            <button type="button" class="btn btn-primary btn-full btn-generate btn-next" id="btn-generate-photos">
+              Запустить генерацию
+            </button>
+          </div>
+          <div class="status" id="photoshoot-status"></div>
+          <div class="gallery" id="photoshoot-gallery"></div>
+          <div class="card" id="step-sessions" style="margin-top: 16px;">
+            <div class="section-title">Ваши сессии</div>
+            <div class="section-caption">Список недавних фотосессий.</div>
+            <button type="button" class="btn btn-secondary btn-full" id="btn-refresh-sessions" style="margin-top: 8px;">Обновить список</button>
+            <div class="sessions" id="sessions-list"></div>
+          </div>
         </div>
-        <div class="row" style="margin-top: 6px">
-          <button class="btn btn-secondary btn-full" id="btn-refresh-sessions">
-            Обновить список сессий
-          </button>
-        </div>
-        <div class="sessions" id="sessions-list"></div>
       </div>
     </div>
 
@@ -660,20 +695,38 @@
       const avatarFilesInput = document.getElementById('avatar-files');
       const avatarFilesHint = document.getElementById('avatar-files-hint');
       const avatarStatus = document.getElementById('avatar-status');
-      const btnSaveAvatar = document.getElementById('btn-save-avatar');
 
       const productUrlInput = document.getElementById('product-url');
       const productImageUrlsInput = document.getElementById('product-image-urls');
       const productStatus = document.getElementById('product-status');
-      const btnAnalyzeProduct = document.getElementById('btn-analyze-product');
       const tabCard = document.getElementById('tab-card');
       const tabManual = document.getElementById('tab-manual');
       const panelCard = document.getElementById('panel-card');
       const panelManual = document.getElementById('panel-manual');
-      const btnCheckManual = document.getElementById('btn-check-manual');
       const manualStatus = document.getElementById('manual-status');
+      const stepperEl = document.getElementById('stepper');
+      const btnNext1 = document.getElementById('btn-next-1');
+      const btnBack2 = document.getElementById('btn-back-2');
+      const btnNext2 = document.getElementById('btn-next-2');
+      const btnBack3 = document.getElementById('btn-back-3');
 
+      let currentScreen = 1;
       let productMode = 'manual';
+
+      function showScreen(step) {
+        currentScreen = step;
+        document.querySelectorAll('.screen').forEach((el) => el.classList.remove('active'));
+        const screen = document.getElementById('screen-' + step);
+        if (screen) screen.classList.add('active');
+        stepperEl.querySelectorAll('.stepper-item').forEach((el) => {
+          el.classList.toggle('active', parseInt(el.getAttribute('data-step'), 10) === step);
+        });
+      }
+
+      stepperEl.addEventListener('click', (e) => {
+        const item = e.target.closest('.stepper-item');
+        if (item && item.dataset.step) showScreen(parseInt(item.dataset.step, 10));
+      });
       let manualImagesValid = false;
       const manualProductDataUrls = [];
       const PRODUCT_IMAGE_MAX_FILES = 3;
@@ -719,7 +772,7 @@
           }
         }
         manualImagesValid = false;
-        if (files.length) manualStatus.textContent = `Добавлено фото: ${manualProductDataUrls.length}. Нажмите «Готово» или вставьте ссылки.`;
+        if (files.length) manualStatus.textContent = `Добавлено фото: ${manualProductDataUrls.length}. Можно добавить ссылки ниже или нажать «Далее».`;
         e.target.value = '';
       });
 
@@ -866,83 +919,65 @@
         }
       });
 
-      btnSaveAvatar.addEventListener('click', async () => {
-        avatarStatus.textContent = 'Создаём виртуальную внешность...';
+      btnNext1.addEventListener('click', async () => {
+        const urlsFromTextarea = (avatarUrlsInput.value || '')
+          .split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .slice(0, 3);
+        const hasFiles = uploadedAvatarDataUrls.length > 0;
+        const hasUrls = urlsFromTextarea.length > 0;
+        if (!hasFiles && !hasUrls) {
+          avatarStatus.textContent = 'Добавьте хотя бы одно фото или ссылку на фото.';
+          avatarStatus.className = 'status status-error';
+          return;
+        }
+        avatarStatus.textContent = 'Сохраняем...';
         avatarStatus.className = 'status';
         try {
-          const urlsFromTextarea = avatarUrlsInput.value
-            .split('\n')
-            .map((s) => s.trim())
-            .filter(Boolean)
-            .slice(0, 3);
-          const hasFiles = uploadedAvatarDataUrls.length > 0;
-          const hasUrls = urlsFromTextarea.length > 0;
-
-          if (!hasFiles && !hasUrls) {
-            avatarStatus.textContent = 'Добавьте хотя бы одно фото или ссылку на фото.';
-            avatarStatus.classList.add('status-error');
-            return;
-          }
-
           const telegramUserId = getTelegramUserId();
-
           await callApi('/api/avatar/clear', { body: { telegramUserId } });
-
           for (const dataUrl of uploadedAvatarDataUrls) {
-            await callApi('/api/avatar/upload', {
-              body: { telegramUserId, photoDataUrl: dataUrl }
-            });
+            await callApi('/api/avatar/upload', { body: { telegramUserId, photoDataUrl: dataUrl } });
           }
           for (const url of urlsFromTextarea) {
-            await callApi('/api/avatar/upload', {
-              body: { telegramUserId, photoDataUrl: url }
-            });
+            await callApi('/api/avatar/upload', { body: { telegramUserId, photoDataUrl: url } });
           }
-
-          avatarStatus.textContent = 'Внешность сохранена. Можно переходить к выбору товара.';
-          avatarStatus.classList.add('status-ok');
+          avatarStatus.textContent = '';
+          showScreen(2);
         } catch (err) {
-          avatarStatus.textContent = err.message || 'Не удалось создать внешность.';
+          avatarStatus.textContent = err.message || 'Не удалось сохранить.';
           avatarStatus.classList.add('status-error');
         }
       });
 
-      btnAnalyzeProduct.addEventListener('click', async () => {
-        productStatus.textContent = 'Анализируем карточку товара...';
-        productStatus.className = 'status';
-        lastAnalysis = null;
-        photoshootGallery.innerHTML = '';
-        try {
+      btnBack2.addEventListener('click', () => showScreen(1));
+      btnNext2.addEventListener('click', async () => {
+        if (productMode === 'card') {
           const raw = productUrlInput.value.trim();
           const url = extractProductUrl(raw) || raw;
-          if (!url) {
-            productStatus.textContent = 'Вставьте ссылку на карточку товара WB или Ozon.';
-            productStatus.classList.add('status-error');
-            return;
-          }
-          if (url !== raw) productUrlInput.value = url;
-
-          const telegramUserId = getTelegramUserId();
-          const data = await callApi('/api/product/analyze', {
-            body: {
-              telegramUserId,
-              productUrl: url
+          if (url) {
+            productStatus.textContent = 'Загружаем карточку...';
+            productStatus.className = 'status';
+            try {
+              const telegramUserId = getTelegramUserId();
+              const data = await callApi('/api/product/analyze', {
+                body: { telegramUserId, productUrl: url }
+              });
+              lastAnalysis = data;
+              productStatus.textContent = '';
+            } catch (_) {
+              productStatus.textContent = '';
             }
-          });
-
-          lastAnalysis = data;
-          if (data.images && data.images.length === 0 && data.imageFetchHint) {
-            productStatus.textContent = data.imageFetchHint;
-            productStatus.classList.add('status-error');
-          } else {
-            productStatus.textContent = 'Товар выглядит как одежда/аксессуар. Можно запускать фотосессию.';
-            productStatus.classList.add('status-ok');
           }
-        } catch (err) {
-          productStatus.textContent = err.message || 'Не удалось проанализировать товар.';
-          productStatus.classList.add('status-error');
+        } else {
+          const fromFiles = manualProductDataUrls.length;
+          const fromUrls = parseManualImageUrls().filter(looksLikeImageUrl).length;
+          if (fromFiles > 0 || fromUrls > 0) manualImagesValid = true;
         }
+        showScreen(3);
       });
+      btnBack3.addEventListener('click', () => showScreen(2));
 
       function parseManualImageUrls() {
         return (productImageUrlsInput?.value || '')
@@ -954,29 +989,6 @@
         const lower = (u || '').toLowerCase();
         return /\.(jpe?g|png|webp|gif)(\?|$)/i.test(lower) || lower.includes('/images/') || lower.startsWith('data:image/');
       }
-
-      btnCheckManual.addEventListener('click', () => {
-        manualStatus.className = 'status';
-        const urls = parseManualImageUrls();
-        const imageUrls = urls.filter(looksLikeImageUrl);
-        const hasFiles = manualProductDataUrls.length > 0;
-        const hasValidUrls = imageUrls.length > 0;
-        if (!hasFiles && urls.length === 0) {
-          manualStatus.textContent = 'Добавьте фото кнопкой выше или вставьте ссылки на изображения.';
-          manualStatus.classList.add('status-error');
-          manualImagesValid = false;
-          return;
-        }
-        if (!hasFiles && imageUrls.length === 0) {
-          manualStatus.textContent = 'Ссылки должны вести на изображения (.jpg, .png, .webp или /images/).';
-          manualStatus.classList.add('status-error');
-          manualImagesValid = false;
-          return;
-        }
-        manualImagesValid = true;
-        manualStatus.textContent = 'Готово. Переходите к шагу 3 и нажмите «Запустить генерацию».';
-        manualStatus.classList.add('status-ok');
-      });
 
       productImageUrlsInput.addEventListener('input', () => { manualImagesValid = false; });
 
@@ -995,14 +1007,9 @@
             const fromUrls = parseManualImageUrls().filter(looksLikeImageUrl).slice(0, 5 - fromFiles.length);
             images = [...fromFiles, ...fromUrls].slice(0, 5);
             if (images.length === 0) {
-              photoshootStatus.textContent = 'Добавьте фото товара (кнопкой или ссылками) и нажмите «Готово, перейти к генерации».';
+              photoshootStatus.textContent = 'Вернитесь на шаг 2 и добавьте фото товара (кнопкой или ссылками).';
               photoshootStatus.classList.add('status-error');
               return;
-            }
-            if (!manualImagesValid && images.length > 0) {
-              manualImagesValid = true;
-              manualStatus.textContent = 'Готово. Переходите к шагу 3.';
-              manualStatus.classList.add('status-ok');
             }
             productUrl = images[0] || '';
             title = 'Фото вручную';
@@ -1010,17 +1017,24 @@
             const raw = productUrlInput.value.trim();
             productUrl = extractProductUrl(raw) || raw;
             if (!productUrl) {
-              photoshootStatus.textContent = 'Вставьте ссылку на карточку товара или перейдите во вкладку «Загрузить вручную».';
+              photoshootStatus.textContent = 'Вернитесь на шаг 2 и вставьте ссылку на карточку WB или добавьте фото вручную.';
               photoshootStatus.classList.add('status-error');
               return;
             }
             if (productUrl !== raw) productUrlInput.value = productUrl;
+            if (!lastAnalysis || !lastAnalysis.images?.length) {
+              photoshootStatus.textContent = 'Загружаем карточку WB...';
+              try {
+                const data = await callApi('/api/product/analyze', {
+                  body: { telegramUserId, productUrl }
+                });
+                lastAnalysis = data;
+              } catch (_) {}
+            }
             images =
               lastAnalysis && lastAnalysis.images && lastAnalysis.images.length
                 ? lastAnalysis.images
-                : lastAnalysis && lastAnalysis.imageFetchHint
-                  ? []
-                  : [productUrl];
+                : [productUrl];
             title = lastAnalysis?.title || null;
           }
 
