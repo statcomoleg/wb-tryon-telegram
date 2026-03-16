@@ -15,6 +15,8 @@ const { nanoBananaClient } = require('./services/nanoBananaClient');
 const { analyzeProductUrl } = require('./services/productAnalyzer');
 const { sessionStore } = require('./services/sessionStore');
 const { tempImageStore } = require('./services/tempImageStore');
+const { persistDb } = require('./services/persistDb');
+const { getBot } = require('./telegramBot');
 
 const app = express();
 
@@ -55,7 +57,47 @@ app.get('/api/temp-image/:id', (req, res) => {
 });
 
 app.post('/api/nanobanana-callback', (req, res) => {
+  // Must respond fast (<15s). Processing is lightweight (db update + bot notify).
   res.status(200).send();
+  try {
+    const data = req.body?.data || req.body || {};
+    const taskId = data?.taskId;
+    const successFlag = data?.successFlag;
+    const resultImageUrl = data?.response?.resultImageUrl || data?.response?.originImageUrl || null;
+    const errorMessage = data?.errorMessage || data?.message || null;
+
+    if (!taskId) return;
+
+    if (successFlag === 1 && resultImageUrl) {
+      const row = persistDb.updateTryonByTaskId(taskId, {
+        status: 'success',
+        resultImages: [resultImageUrl],
+        error: null
+      });
+      if (row) {
+        sessionStore.appendGeneratedImages(row.telegramUserId, row.sessionId, [resultImageUrl]);
+        const chatId = persistDb.getChatIdByTelegramUserId(row.telegramUserId);
+        const bot = getBot && getBot();
+        if (chatId && bot) {
+          bot.sendMessage(chatId, 'Примерка готова!').catch(() => {});
+          bot.sendPhoto(chatId, resultImageUrl, {
+            caption: (row.productTitle ? `Товар: ${row.productTitle}\n` : '') + 'Нажмите «Открыть мини-приложение», чтобы посмотреть историю примерок.'
+          }).catch(() => {});
+        }
+      }
+      return;
+    }
+
+    if (successFlag === 2 || successFlag === 3) {
+      persistDb.updateTryonByTaskId(taskId, {
+        status: 'error',
+        error: errorMessage || 'Generation failed'
+      });
+      return;
+    }
+  } catch (e) {
+    console.error('[nanobanana-callback] error:', e?.message || e);
+  }
 });
 
 // Telegram webhook (чтобы не было 409: только один приём обновлений вместо polling)
@@ -237,26 +279,55 @@ app.post('/api/photoshoot', async (req, res) => {
       product
     });
 
-    // Call Nano Banana Pro client to generate a collage / photoshoot
-    const generated = await nanoBananaClient.generatePhotoshoot({
+    // Async mode: create task and return immediately (do not block mini-app UI)
+    const enqueue = await nanoBananaClient.enqueueTryOn({
       appearance,
       productImages,
       sessionId: session.id
     });
 
-    // Save generated images to session
-    sessionStore.appendGeneratedImages(telegramUserId, session.id, generated.images);
+    const row = persistDb.createTryon({
+      telegramUserId,
+      sessionId: session.id,
+      productUrl: product.url,
+      productTitle: product.title || null,
+      productImages: productImages.slice(0, 5),
+      taskId: enqueue.taskId,
+      status: 'running'
+    });
 
     return res.json({
       sessionId: session.id,
-      images: generated.images,
-      generated: generated.generated === true,
-      error: generated.error || null
+      tryonId: row.id,
+      status: row.status
     });
   } catch (err) {
     console.error('Error in /api/photoshoot:', err);
     const message = err && err.message ? err.message : 'Failed to generate photoshoot';
     return res.status(500).json({ error: message });
+  }
+});
+
+// History API (persistent)
+app.get('/api/tryons/:telegramUserId', (req, res) => {
+  try {
+    const telegramUserId = String(req.params.telegramUserId || '');
+    const limit = req.query.limit ? Number(req.query.limit) : 50;
+    if (!telegramUserId) return res.status(400).json({ error: 'telegramUserId required' });
+    const items = persistDb.listTryons(telegramUserId, { limit });
+    return res.json({ tryons: items });
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to load history' });
+  }
+});
+
+app.get('/api/tryon/:id', (req, res) => {
+  try {
+    const row = persistDb.getTryon(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Not found' });
+    return res.json(row);
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to load tryon' });
   }
 });
 

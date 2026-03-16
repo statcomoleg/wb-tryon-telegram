@@ -60,14 +60,14 @@ async function createOrUpdateAppearance({ userId, photoUrls }) {
 /**
  * Создать задачу генерации (Nano Banana 2): POST /api/v1/nanobanana/generate-2
  * Документация: https://docs.nanobananaapi.ai/nanobanana-api/generate-image-2
- * Качество по умолчанию 2K (быстрее и дешевле Pro).
+ * Качество по умолчанию 1K (быстрее и стабильнее; 2K можно включить через NANO_BANANA_RESOLUTION=2K).
  */
 async function createGenerationTask({ prompt, referenceImages }) {
   const baseAppUrl = (process.env.PUBLIC_APP_URL || process.env.WEBAPP_URL || '').replace(/\/webapp\/?$/, '').replace(/\/+$/, '');
   const body = {
     prompt,
     imageUrls: Array.isArray(referenceImages) ? referenceImages.slice(0, 14) : [],
-    resolution: process.env.NANO_BANANA_RESOLUTION || '2K',
+    resolution: process.env.NANO_BANANA_RESOLUTION || '1K',
     aspectRatio: process.env.NANO_BANANA_ASPECT_RATIO || '16:9'
   };
   if (body.imageUrls.length === 0) delete body.imageUrls;
@@ -281,6 +281,85 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
   }
 }
 
+/** Собрать промпт (используется и для async enqueue). */
+function buildTryOnPrompt({ personCount, productCount }) {
+  const basePrompt = NANO_BANANA_PROMPT || DEFAULT_TRYON_PROMPT;
+  return basePrompt
+    .replace(/\{personCount\}/g, String(personCount))
+    .replace(/\{productCount\}/g, String(productCount));
+}
+
+/** Подготовить referenceImages (проксирование/временные url), возвращает { referenceImages, personCount, productCount }. */
+async function prepareTryOnReferences({ appearance, productImages }) {
+  const personRefs = appearance?.referenceImages || [];
+  const productRefs = Array.isArray(productImages) ? productImages.slice(0, 2) : [];
+  const isProductPageUrl = (u) =>
+    typeof u === 'string' &&
+    !u.startsWith('data:image/') &&
+    /\b(ozon\.ru\/t\/|ozon\.ru\/product\/|wildberries\.ru\/catalog\/)/i.test(u);
+  const productRefsFiltered = productRefs.filter((u) => !isProductPageUrl(u));
+  const garmentUrls =
+    productRefsFiltered.length >= 2
+      ? productRefsFiltered.slice(0, 2)
+      : productRefsFiltered.length === 1
+        ? [productRefsFiltered[0], productRefsFiltered[0]]
+        : [];
+  if (garmentUrls.length === 0) {
+    throw new Error('Нет фото товара для примерки');
+  }
+
+  let referenceImages = [...personRefs, ...garmentUrls].slice(0, 8);
+  const baseAppUrl = (process.env.PUBLIC_APP_URL || process.env.WEBAPP_URL || '').replace(/\/webapp\/?$/, '').replace(/\/+$/, '');
+
+  // data:image/* → temp url (нужен публичный baseAppUrl)
+  if (baseAppUrl && referenceImages.some((u) => typeof u === 'string' && u.startsWith('data:image/'))) {
+    referenceImages = referenceImages.map((url) => {
+      if (typeof url !== 'string' || !url.startsWith('data:image/')) return url;
+      const id = tempImageStore.saveDataUrl(url);
+      return id ? `${baseAppUrl}/api/temp-image/${id}` : url;
+    }).filter(Boolean);
+  }
+
+  // Проксируем маркетплейсы (403 с сервера NanoBanana)
+  const needsProxy = (u) =>
+    typeof u === 'string' &&
+    !u.startsWith('data:image/') &&
+    !u.includes(baseAppUrl || '') &&
+    (/ozon\.ru/i.test(u) || /\.wb\.ru|wbcontent\.net|wildberries/i.test(u));
+  if (baseAppUrl && referenceImages.some(needsProxy)) {
+    referenceImages = await Promise.all(
+      referenceImages.map(async (url) => {
+        if (!needsProxy(url)) return url;
+        try {
+          const proxied = await proxyImageUrl(url, baseAppUrl);
+          return proxied || url;
+        } catch (_) {
+          return url;
+        }
+      })
+    );
+    referenceImages = referenceImages.filter(Boolean);
+  }
+
+  return {
+    referenceImages,
+    personCount: personRefs.length,
+    productCount: garmentUrls.length
+  };
+}
+
+/**
+ * Async enqueue: создаёт задачу генерации и СРАЗУ возвращает taskId (мини-апп не ждёт).
+ * Дальше результат придёт на /api/nanobanana-callback.
+ */
+async function enqueueTryOn({ appearance, productImages, sessionId }) {
+  if (!NANO_BANANA_API_KEY) throw new Error('Ключ API не задан.');
+  const { referenceImages, personCount, productCount } = await prepareTryOnReferences({ appearance, productImages });
+  const prompt = buildTryOnPrompt({ personCount, productCount });
+  const taskId = await createGenerationTask({ prompt, referenceImages });
+  return { sessionId, taskId };
+}
+
 /**
  * Быстрая проверка: запрос баланса (GET /api/v1/common/credit).
  * Ответ за 1–2 сек, без генерации — страница не «висит».
@@ -351,6 +430,7 @@ async function testGeneration() {
 
 const nanoBananaClient = {
   createOrUpdateAppearance,
+  enqueueTryOn,
   generatePhotoshoot,
   testGeneration
 };

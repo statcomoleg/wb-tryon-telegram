@@ -3,6 +3,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://example.com/webapp';
 const USE_WEBHOOK = process.env.TELEGRAM_USE_WEBHOOK === 'true';
+const { persistDb } = require('./services/persistDb');
 
 let botInstance = null;
 
@@ -25,6 +26,12 @@ function initBot() {
   bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id;
     const firstName = msg.from?.first_name || '';
+    const telegramUserId = String(msg.from?.id || chatId);
+
+    // Persist mapping so we can notify user in bot later
+    try {
+      persistDb.upsertTgUser({ telegramUserId, chatId });
+    } catch (_) {}
 
     try {
       await bot.sendMessage(
