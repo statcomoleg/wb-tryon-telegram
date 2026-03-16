@@ -952,6 +952,18 @@
         }
       });
 
+      if (btnHistory) {
+        btnHistory.addEventListener('click', () => {
+          showScreen('history');
+          refreshSessions();
+        });
+      }
+      if (btnBackFromHistory) {
+        btnBackFromHistory.addEventListener('click', () => {
+          showScreen(3);
+        });
+      }
+
       /** Сильное сжатие: один запрос — одно фото, чтобы обойти 413 на Render. */
       const AVATAR_MAX_PX = 400;
       const AVATAR_JPEG_QUALITY = 0.5;
