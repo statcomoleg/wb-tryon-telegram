@@ -1,7 +1,7 @@
 const axios = require('axios');
 const { tempImageStore } = require('./tempImageStore');
 
-// NanoBanana API (https://docs.nanobananaapi.ai) — базовый URL и ключ
+// NanoBanana API (https://docs.nanobananaapi.ai) — Nano Banana 2 (быстрее и дешевле Pro)
 const NANO_BANANA_API_KEY = (process.env.NANO_BANANA_API_KEY || '').trim();
 const NANO_BANANA_BASE_URL = (process.env.NANO_BANANA_BASE_URL || 'https://api.nanobananaapi.ai').replace(/\/+$/, '');
 
@@ -58,21 +58,22 @@ async function createOrUpdateAppearance({ userId, photoUrls }) {
 }
 
 /**
- * Создать задачу генерации (NanoBanana Pro): POST /api/v1/nanobanana/generate-pro
- * Документация: https://docs.nanobananaapi.ai/nanobanana-api/generate-image-pro
+ * Создать задачу генерации (Nano Banana 2): POST /api/v1/nanobanana/generate-2
+ * Документация: https://docs.nanobananaapi.ai/nanobanana-api/generate-image-2
+ * Качество по умолчанию 2K (быстрее и дешевле Pro).
  */
 async function createGenerationTask({ prompt, referenceImages }) {
   const baseAppUrl = (process.env.PUBLIC_APP_URL || process.env.WEBAPP_URL || '').replace(/\/webapp\/?$/, '').replace(/\/+$/, '');
   const body = {
     prompt,
-    imageUrls: Array.isArray(referenceImages) ? referenceImages.slice(0, 8) : [],
-    resolution: process.env.NANO_BANANA_RESOLUTION || '1K',
+    imageUrls: Array.isArray(referenceImages) ? referenceImages.slice(0, 14) : [],
+    resolution: process.env.NANO_BANANA_RESOLUTION || '2K',
     aspectRatio: process.env.NANO_BANANA_ASPECT_RATIO || '16:9'
   };
   if (body.imageUrls.length === 0) delete body.imageUrls;
   if (baseAppUrl) body.callBackUrl = `${baseAppUrl}/api/nanobanana-callback`;
 
-  const url = `${NANO_BANANA_BASE_URL}/api/v1/nanobanana/generate-pro`;
+  const url = `${NANO_BANANA_BASE_URL}/api/v1/nanobanana/generate-2`;
   const response = await axios.post(url, body, {
     headers: {
       'Content-Type': 'application/json',
@@ -206,17 +207,21 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
     );
   }
   let referenceImages = [...personRefs, ...garmentUrls].slice(0, 8);
+  const tempIdsCreated = [];
 
   const baseAppUrl = (process.env.PUBLIC_APP_URL || process.env.WEBAPP_URL || '').replace(/\/webapp\/?$/, '').replace(/\/+$/, '');
   if (baseAppUrl && referenceImages.some((u) => typeof u === 'string' && u.startsWith('data:image/'))) {
     referenceImages = referenceImages.map((url) => {
       if (typeof url !== 'string' || !url.startsWith('data:image/')) return url;
       const id = tempImageStore.saveDataUrl(url);
-      return id ? `${baseAppUrl}/api/temp-image/${id}` : url;
+      if (id) {
+        tempIdsCreated.push(id);
+        return `${baseAppUrl}/api/temp-image/${id}`;
+      }
+      return url;
     }).filter(Boolean);
   }
 
-  // Проксируем картинки маркетплейсов: CDN может отдавать 403 при запросе с сервера NanoBanana
   const needsProxy = (u) =>
     typeof u === 'string' &&
     !u.startsWith('data:image/') &&
@@ -228,7 +233,12 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
         if (!needsProxy(url)) return url;
         try {
           const proxied = await proxyImageUrl(url, baseAppUrl);
-          return proxied || url;
+          if (proxied) {
+            const m = proxied.match(/\/api\/temp-image\/([a-f0-9-]+)/i);
+            if (m) tempIdsCreated.push(m[1]);
+            return proxied;
+          }
+          return url;
         } catch (e) {
           console.warn('[nanoBanana] proxy failed for', url.slice(0, 60), e?.message);
           return url;
@@ -266,6 +276,8 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
       : '';
     console.error('NanoBanana API failed, returning product images as fallback:', msg);
     return fallbackResult(msg + hint);
+  } finally {
+    tempIdsCreated.forEach((id) => tempImageStore.deleteId(id));
   }
 }
 

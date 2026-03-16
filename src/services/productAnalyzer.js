@@ -37,12 +37,41 @@ function getWildberriesImageUrls(productUrl) {
   else hostNum = '18';
 
   const pathPart = `vol${vol}/part${part}/${nmId}/images/big/`;
-  const base = `https://basket-${hostNum}.wb.ru/${pathPart}`;
+  // wbbasket.ru обычно стабильнее при прямой загрузке
+  const base = `https://basket-${hostNum}.wbbasket.ru/${pathPart}`;
   return [1, 2, 3].map((n) => `${base}${n}.webp`);
 }
 
+const WB_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  Accept: 'image/webp,image/apng,image/*,*/*;q=0.8',
+  'Accept-Language': 'ru-RU,ru;q=0.9'
+};
+
+/** Проверка URL картинки: GET (часть CDN не отдаёт HEAD), до 2 попыток. */
+async function checkImageUrlOk(imageUrl, retries = 2) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await axios.get(imageUrl, {
+        responseType: 'arraybuffer',
+        timeout: 8000,
+        maxContentLength: 8 * 1024 * 1024,
+        maxRedirects: 5,
+        validateStatus: (s) => s === 200,
+        headers: WB_HEADERS
+      });
+      const ct = (res.headers && res.headers['content-type']) || '';
+      const isImage = /^image\/(jpeg|jpg|png|webp|avif)/i.test(ct);
+      const hasBody = res.data && res.data.length > 200;
+      if (isImage && hasBody) return true;
+    } catch (_) {}
+    if (attempt < retries) await new Promise((r) => setTimeout(r, 300));
+  }
+  return false;
+}
+
 /**
- * Вернуть рабочие URL картинок WB: сначала пробуем wb.ru, при 404 — wbbasket.ru.
+ * Вернуть рабочие URL картинок WB: wbbasket.ru / wb.ru, пути big/plain/hq, расширения .webp и .jpg.
  */
 async function resolveWildberriesImageUrls(productUrl) {
   const pathname = (url.parse(productUrl).pathname || '');
@@ -77,41 +106,45 @@ async function resolveWildberriesImageUrls(productUrl) {
   const pathPartPlain = `vol${vol}/part${part}/${nmId}/images/`;
   const pathPartHq = `vol${vol}/part${part}/${nmId}/images/hq/`;
 
+  /** Собрать рабочие URL для домена/пути: проверяем индексы 1..5 и расширения .webp, .jpg */
   const tryDomain = async (domain, pathPart, host) => {
     const found = [];
-    const mk = (n) => `https://basket-${host}.${domain}/${pathPart}${n}.webp`;
-    for (let n = 1; n <= 3; n++) {
-      try {
-        const res = await axios.head(mk(n), {
-          timeout: 6000,
-          validateStatus: () => true,
-          maxRedirects: 3
-        });
-        const ct = (res.headers && res.headers['content-type']) || '';
-        const isImage = /^image\/(jpeg|jpg|png|webp|avif)/i.test(ct);
-        if (res.status === 200 && isImage) found.push(mk(n));
-      } catch (_) {}
+    const exts = ['webp', 'jpg'];
+    for (let n = 1; n <= 5; n++) {
+      for (const ext of exts) {
+        const u = `https://basket-${host}.${domain}/${pathPart}${n}.${ext}`;
+        if (found.includes(u)) continue;
+        const ok = await checkImageUrlOk(u);
+        if (ok) {
+          found.push(u);
+          break; // один индекс — один URL
+        }
+      }
+      if (found.length >= 3) return found;
     }
     return found.length ? found : null;
   };
 
-  for (const domain of ['wb.ru', 'wbbasket.ru']) {
+  // Сначала парсинг страницы (часто даёт точные URL с любого зеркала)
+  const fromPage = await getWildberriesImageUrlsFromPage(productUrl);
+  if (fromPage.length >= 1) return fromPage.slice(0, 5);
+
+  // wbbasket.ru часто стабильнее, потом wb.ru
+  for (const domain of ['wbbasket.ru', 'wb.ru']) {
     const urls = await tryDomain(domain, pathPartBig, hostNum);
     if (urls && urls.length) return urls;
   }
-  for (const domain of ['wb.ru', 'wbbasket.ru']) {
+  for (const domain of ['wbbasket.ru', 'wb.ru']) {
     const urls = await tryDomain(domain, pathPartPlain, hostNum);
     if (urls && urls.length) return urls;
   }
-  // для высоких nmId пробуем ещё host 01 (часть товаров зеркалится)
   if (hostNum !== '01') {
-    for (const domain of ['wb.ru', 'wbbasket.ru']) {
+    for (const domain of ['wbbasket.ru', 'wb.ru']) {
       const urls = await tryDomain(domain, pathPartBig, '01');
       if (urls && urls.length) return urls;
     }
   }
 
-  // часть товаров (например 628558673) отдаётся с basket-XX.wbcontent.net, путь images/hq/
   for (const host of ['31', '18', '17', '01']) {
     const urls = await tryDomain('wbcontent.net', pathPartHq, host);
     if (urls && urls.length) return urls;
@@ -121,48 +154,51 @@ async function resolveWildberriesImageUrls(productUrl) {
     if (urls && urls.length) return urls;
   }
 
-  const fromPage = await getWildberriesImageUrlsFromPage(productUrl);
-  if (fromPage.length) return fromPage;
-
-  return [`https://basket-${hostNum}.wb.ru/${pathPartBig}1.webp`];
+  // Фолбэк: возвращаем сконструированные URL без проверки (прокси попробует загрузить)
+  const constructed = getWildberriesImageUrls(productUrl);
+  if (constructed.length) return constructed;
+  return [`https://basket-${hostNum}.wbbasket.ru/${pathPartBig}1.webp`];
 }
 
 /**
  * Запасной вариант: загрузить страницу товара WB и вытащить URL картинок из HTML.
+ * Referer и повторные попытки повышают стабильность.
  */
 async function getWildberriesImageUrlsFromPage(productUrl) {
-  try {
-    const res = await axios.get(productUrl, {
-      timeout: 10000,
-      maxRedirects: 5,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Accept: 'text/html,application/xhtml+xml',
-        'Accept-Language': 'ru-RU,ru;q=0.9'
-      },
-      validateStatus: (s) => s === 200
-    });
-    const html = (res.data && typeof res.data === 'string') ? res.data : '';
-    const found = new Set();
-    const reWb = /https?:\/\/[^"'\s<>]*?(?:basket-\d+\.(?:wb\.ru|wbbasket\.ru)|[\w-]+\.wb\.ru)[^"'\s<>]*\.(?:webp|jpg|jpeg|png|avif)(?:\?[^"'\s<>]*)?/gi;
-    const reWbContent = /https?:\/\/[^"'\s<>]*?basket-\d+\.wbcontent\.net[^"'\s<>]*\.(?:webp|jpg|jpeg|png|avif)(?:\?[^"'\s<>]*)?/gi;
-    let m;
-    while ((m = reWb.exec(html)) !== null) found.add(m[0].replace(/["'\s)]+$/, ''));
-    while ((m = reWbContent.exec(html)) !== null) found.add(m[0].replace(/["'\s)]+$/, ''));
-    const arr = [...found].slice(0, 5);
-    const verified = [];
-    for (const u of arr) {
-      try {
-        const r = await axios.head(u, { timeout: 4000, validateStatus: () => true, maxRedirects: 2 });
-        const ct = (r.headers && r.headers['content-type']) || '';
-        const isImage = /^image\/(jpeg|jpg|png|webp|avif)/i.test(ct);
-        if (r.status === 200 && isImage) verified.push(u);
-      } catch (_) {}
-    }
-    return verified;
-  } catch (_) {
-    return [];
+  const opts = (url) => ({
+    timeout: 12000,
+    maxRedirects: 5,
+    headers: {
+      ...WB_HEADERS,
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      Referer: 'https://www.wildberries.ru/'
+    },
+    validateStatus: (s) => s === 200
+  });
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const res = await axios.get(productUrl, opts(productUrl));
+      const html = (res.data && typeof res.data === 'string') ? res.data : '';
+      const found = new Set();
+      const reWb = /https?:\/\/[^"'\s<>]*?(?:basket-\d+\.(?:wb\.ru|wbbasket\.ru)|[\w-]+\.wb\.ru)[^"'\s<>]*\.(?:webp|jpg|jpeg|png|avif)(?:\?[^"'\s<>]*)?/gi;
+      const reWbContent = /https?:\/\/[^"'\s<>]*?(?:basket-\d+\.wbcontent\.net|[\w-]+\.wbcontent\.net)[^"'\s<>]*\.(?:webp|jpg|jpeg|png|avif)(?:\?[^"'\s<>]*)?/gi;
+      const reGeneric = /https?:\/\/[^"'\s<>]*?(?:wb\.ru|wbbasket\.ru|wbcontent\.net)[^"'\s<>]*\.(?:webp|jpg|jpeg|png|avif)(?:\?[^"'\s<>]*)?/gi;
+      let m;
+      while ((m = reWb.exec(html)) !== null) found.add(m[0].replace(/["'\s)]+$/, '').replace(/\\u002F/g, '/'));
+      while ((m = reWbContent.exec(html)) !== null) found.add(m[0].replace(/["'\s)]+$/, '').replace(/\\u002F/g, '/'));
+      while ((m = reGeneric.exec(html)) !== null) found.add(m[0].replace(/["'\s)]+$/, '').replace(/\\u002F/g, '/'));
+      const arr = [...found].slice(0, 7);
+      const verified = [];
+      for (const u of arr) {
+        const ok = await checkImageUrlOk(u, 1);
+        if (ok) verified.push(u);
+        if (verified.length >= 3) break;
+      }
+      if (verified.length) return verified;
+    } catch (_) {}
+    if (attempt < 2) await new Promise((r) => setTimeout(r, 500));
   }
+  return [];
 }
 
 function getOzonHeaders(cookie) {
@@ -335,12 +371,27 @@ async function analyzeProductUrl(productUrl) {
     };
   }
 
+  const OZON_PARSER_URL = (process.env.OZON_PARSER_URL || '').trim();
+
   let images = [];
   if (host.includes('wildberries')) {
     images = await resolveWildberriesImageUrls(productUrl);
     if (images.length === 0) images = getWildberriesImageUrls(productUrl);
   } else if (host.includes('ozon')) {
-    images = await resolveOzonImageUrls(productUrl);
+    if (OZON_PARSER_URL) {
+      try {
+        const parserRes = await axios.post(OZON_PARSER_URL, { url: productUrl }, { timeout: 20000 });
+        const list = parserRes?.data?.images || parserRes?.data?.imageUrls || parserRes?.data;
+        if (Array.isArray(list) && list.length > 0) {
+          images = list.filter((u) => typeof u === 'string' && /^https?:\/\//i.test(u));
+        }
+      } catch (e) {
+        console.warn('[Ozon] external parser failed:', e?.message);
+      }
+    }
+    if (images.length === 0) {
+      images = await resolveOzonImageUrls(productUrl);
+    }
     if (images.length === 0) {
       const isShortLink = /ozon\.ru\/t\//i.test(productUrl);
       return {

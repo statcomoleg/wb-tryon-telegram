@@ -99,6 +99,17 @@
         margin-bottom: 10px;
       }
 
+      .hint-block {
+        font-size: 12px;
+        color: var(--muted);
+        background: rgba(59, 130, 246, 0.12);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        border-radius: var(--radius-md);
+        padding: 10px 12px;
+        margin-bottom: 14px;
+        line-height: 1.4;
+      }
+
       label {
         font-size: 13px;
         display: block;
@@ -597,6 +608,9 @@
         <div class="card step-card">
           <div class="step-label">Шаг 2</div>
           <div class="section-title">Товар для примерки</div>
+          <div class="hint-block">
+            Со смартфона скачать фото из приложения WB нельзя — используйте вкладку «Карточка WB» и вставьте ссылку на товар (Поделиться → Копировать). Фото подгрузятся с нашего сервера автоматически.
+          </div>
           <div class="tabs" role="tablist">
             <button type="button" class="tab active" id="tab-manual" role="tab" aria-selected="true">Загрузить вручную</button>
             <button type="button" class="tab" id="tab-card" role="tab" aria-selected="false">Карточка WB</button>

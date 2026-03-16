@@ -57,8 +57,8 @@ copy .env.example .env
 
 - `TELEGRAM_BOT_TOKEN` — токен бота от BotFather;
 - `WEBAPP_URL` — публичный URL мини‑приложения (например, `https://<ngrok-id>.ngrok.io/webapp`);
-- `NANO_BANANA_API_KEY` — ключ от Nano Banana Pro;
-- `NANO_BANANA_BASE_URL` — базовый URL API Nano Banana Pro (смотрите актуальную документацию).
+- `NANO_BANANA_API_KEY` — ключ от Nano Banana 2 (тот же ключ на nanobananaapi.ai);
+- `NANO_BANANA_BASE_URL` — базовый URL API (по умолчанию https://api.nanobananaapi.ai).
 
 5. **Запуск сервера**:
 

@@ -14,5 +14,9 @@ function get(id) {
   return store.get(id) || null;
 }
 
-const tempImageStore = { saveDataUrl, get };
+function deleteId(id) {
+  if (id) store.delete(id);
+}
+
+const tempImageStore = { saveDataUrl, get, deleteId };
 module.exports = { tempImageStore };
