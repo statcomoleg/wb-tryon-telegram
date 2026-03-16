@@ -970,7 +970,15 @@
         if (productMode === 'card') {
           const raw = productUrlInput.value.trim();
           const url = extractProductUrl(raw) || raw;
-          if (url) {
+          if (!url) {
+            productStatus.textContent = 'Вставьте ссылку на карточку WB (Поделиться → Копировать).';
+            productStatus.className = 'status status-error';
+            return;
+          }
+          if (url !== raw) productUrlInput.value = url;
+
+          // Если карточка уже успешно разобрана ранее — не дёргаем сервер ещё раз
+          if (!lastAnalysis || !lastAnalysis.images || !lastAnalysis.images.length || lastAnalysis.productUrl !== url) {
             productStatus.textContent = 'Загружаем карточку...';
             productStatus.className = 'status';
             try {
@@ -979,15 +987,31 @@
                 body: { telegramUserId, productUrl: url }
               });
               lastAnalysis = data;
+              if (!lastAnalysis || !lastAnalysis.images || !lastAnalysis.images.length) {
+                productStatus.textContent =
+                  data?.imageFetchHint ||
+                  'Не удалось автоматически загрузить фото с WB. Вставьте ссылки на фото вручную или попробуйте другой товар.';
+                productStatus.className = 'status status-error';
+                return;
+              }
               productStatus.textContent = '';
-            } catch (_) {
-              productStatus.textContent = '';
+            } catch (e) {
+              productStatus.textContent =
+                e?.message || 'Не удалось загрузить карточку. Попробуйте ещё раз или воспользуйтесь вкладкой «Загрузить вручную».';
+              productStatus.className = 'status status-error';
+              return;
             }
           }
         } else {
           const fromFiles = manualProductDataUrls.length;
           const fromUrls = parseManualImageUrls().filter(looksLikeImageUrl).length;
-          if (fromFiles > 0 || fromUrls > 0) manualImagesValid = true;
+          if (fromFiles > 0 || fromUrls > 0) {
+            manualImagesValid = true;
+          } else {
+            manualStatus.textContent = 'Добавьте хотя бы одно фото файлами или ссылками.';
+            manualStatus.className = 'status status-error';
+            return;
+          }
         }
         showScreen(3);
       });

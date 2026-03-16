@@ -154,6 +154,43 @@ async function resolveWildberriesImageUrls(productUrl) {
     if (urls && urls.length) return urls;
   }
 
+  // Иногда формула basket-XX для больших vol устаревает: подбираем basket быстрым перебором.
+  // Это покрывает случаи вроде nmId=502312919 (vol=5023), где "18" может быть неверным.
+  const probeBasketHost = async (domain, pathPart) => {
+    const hostCandidates = Array.from({ length: 40 }, (_, i) => String(i + 1).padStart(2, '0'));
+    const exts = ['webp', 'jpg'];
+    const n = 1; // сначала проверяем первое фото, этого достаточно чтобы найти basket
+
+    const checkOne = async (host) => {
+      for (const ext of exts) {
+        const u = `https://basket-${host}.${domain}/${pathPart}${n}.${ext}`;
+        // быстрее: одна попытка, и чуть меньший таймаут
+        const ok = await checkImageUrlOk(u, 1);
+        if (ok) return { host, url: u };
+      }
+      return null;
+    };
+
+    // батчами, чтобы не грузить сеть
+    const batchSize = 6;
+    for (let i = 0; i < hostCandidates.length; i += batchSize) {
+      const batch = hostCandidates.slice(i, i + batchSize);
+      const results = await Promise.all(batch.map(checkOne));
+      const hit = results.find(Boolean);
+      if (hit) {
+        // нашли basket — добираем ещё 2-3 фото с этого же хоста
+        const more = await tryDomain(domain, pathPart, hit.host);
+        return more && more.length ? more : [hit.url];
+      }
+    }
+    return null;
+  };
+
+  for (const domain of ['wbbasket.ru', 'wb.ru']) {
+    const probed = await probeBasketHost(domain, pathPartBig);
+    if (probed && probed.length) return probed;
+  }
+
   // Фолбэк: возвращаем сконструированные URL без проверки (прокси попробует загрузить)
   const constructed = getWildberriesImageUrls(productUrl);
   if (constructed.length) return constructed;
