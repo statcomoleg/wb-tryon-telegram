@@ -260,7 +260,7 @@ async function generatePhotoshoot({ appearance, productImages, sessionId }) {
     const taskId = await createGenerationTask({ prompt, referenceImages });
     const images = await waitForTaskResult(taskId, {
       pollIntervalMs: 3000,
-      timeoutMs: 120000
+      timeoutMs: 210000
     });
     return { sessionId, images, generated: true };
   } catch (err) {

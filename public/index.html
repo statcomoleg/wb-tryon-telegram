@@ -726,6 +726,7 @@
 
       let currentScreen = 1;
       let productMode = 'manual';
+      let productCardReady = false;
 
       function showScreen(step) {
         currentScreen = step;
@@ -747,6 +748,7 @@
 
       tabManual.addEventListener('click', () => {
         productMode = 'manual';
+        productCardReady = false;
         tabManual.classList.add('active');
         tabManual.setAttribute('aria-selected', 'true');
         tabCard.classList.remove('active');
@@ -756,6 +758,7 @@
       });
       tabCard.addEventListener('click', () => {
         productMode = 'card';
+        productCardReady = false;
         tabCard.classList.add('active');
         tabCard.setAttribute('aria-selected', 'true');
         tabManual.classList.remove('active');
@@ -977,8 +980,8 @@
           }
           if (url !== raw) productUrlInput.value = url;
 
-          // Если карточка уже успешно разобрана ранее — не дёргаем сервер ещё раз
-          if (!lastAnalysis || !lastAnalysis.images || !lastAnalysis.images.length || lastAnalysis.productUrl !== url) {
+          // Если карточка ещё не разобрана или поменялась — загружаем и ОСТАЁМСЯ на шаге 2
+          if (!productCardReady || !lastAnalysis || !lastAnalysis.images || !lastAnalysis.images.length || lastAnalysis.productUrl !== url) {
             productStatus.textContent = 'Загружаем карточку...';
             productStatus.className = 'status';
             try {
@@ -994,7 +997,10 @@
                 productStatus.className = 'status status-error';
                 return;
               }
-              productStatus.textContent = '';
+              productCardReady = true;
+              productStatus.textContent = 'Фото товара загружены. Можно перейти к шагу 3 и запустить генерацию.';
+              productStatus.className = 'status status-ok';
+              return; // не переходим автоматически на шаг 3
             } catch (e) {
               productStatus.textContent =
                 e?.message || 'Не удалось загрузить карточку. Попробуйте ещё раз или воспользуйтесь вкладкой «Загрузить вручную».';
@@ -1002,6 +1008,7 @@
               return;
             }
           }
+          // карточка уже успешно загружена ранее и не менялась → теперь можно переходить на шаг 3
         } else {
           const fromFiles = manualProductDataUrls.length;
           const fromUrls = parseManualImageUrls().filter(looksLikeImageUrl).length;
