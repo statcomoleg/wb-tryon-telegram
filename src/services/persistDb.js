@@ -112,6 +112,13 @@ function getTryon(id) {
   return db.tryons.find((t) => t.id === id) || null;
 }
 
+function listRunningTryons({ limit = 20 } = {}) {
+  const db = load();
+  return db.tryons
+    .filter((t) => t.status === 'running' && t.taskId)
+    .slice(0, Math.max(1, Math.min(200, Number(limit) || 20)));
+}
+
 const persistDb = {
   upsertTgUser,
   getChatIdByTelegramUserId,
@@ -119,7 +126,8 @@ const persistDb = {
   updateTryonByTaskId,
   updateTryonById,
   listTryons,
-  getTryon
+  getTryon,
+  listRunningTryons
 };
 
 module.exports = { persistDb };

@@ -170,6 +170,46 @@ async function waitForTaskResult(taskId, { pollIntervalMs = 3000, timeoutMs = 12
   throw new Error('NanoBanana API: timeout waiting for task result');
 }
 
+/** Один запрос статуса задачи (для фонового опроса на сервере). */
+async function getTaskStatus(taskId) {
+  const url = `${NANO_BANANA_BASE_URL}/api/v1/nanobanana/record-info`;
+  const response = await axios.get(url, {
+    params: { taskId },
+    headers: getAuthHeaders(),
+    timeout: 15000
+  });
+  const res = response.data;
+  if (res && res.code !== undefined && res.code !== 200) {
+    throw new Error(`NanoBanana API: ${res.msg || res.message || 'query failed'}`);
+  }
+  const data = res?.data ?? res;
+  const successFlag = data?.successFlag ?? -1;
+  const resp = data?.response || data;
+  const resultUrl =
+    resp?.resultImageUrl ||
+    resp?.originImageUrl ||
+    resp?.imageUrl ||
+    resp?.url ||
+    resp?.outputImageUrl ||
+    resp?.output?.url ||
+    (Array.isArray(resp?.output) && resp.output[0] && (resp.output[0].url || resp.output[0])) ||
+    data?.resultImageUrl ||
+    data?.originImageUrl ||
+    data?.imageUrl ||
+    data?.url ||
+    (Array.isArray(resp?.images) && (resp.images[0]?.url || resp.images[0])) ||
+    (Array.isArray(data?.images) && (data.images[0]?.url || data.images[0])) ||
+    (typeof resp === 'string' && resp.startsWith('http') ? resp : null);
+  const errorMessage =
+    data?.errorMessage ||
+    data?.message ||
+    res?.msg ||
+    (typeof data?.errorCode === 'string' ? data.errorCode : null) ||
+    (typeof data?.errorCode === 'number' ? `Error code: ${data.errorCode}` : null) ||
+    null;
+  return { successFlag, resultUrl, errorMessage };
+}
+
 /**
  * Генерация одного коллажа: человек с референс-фото в одежде с фото товара.
  * Референсы: сначала фото человека, потом 1–2 фото товара (до 8 всего).
@@ -432,7 +472,8 @@ const nanoBananaClient = {
   createOrUpdateAppearance,
   enqueueTryOn,
   generatePhotoshoot,
-  testGeneration
+  testGeneration,
+  getTaskStatus
 };
 
 module.exports = {

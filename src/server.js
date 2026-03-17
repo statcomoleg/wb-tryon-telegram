@@ -100,6 +100,52 @@ app.post('/api/nanobanana-callback', (req, res) => {
   }
 });
 
+// Fallback poller: если callback не пришёл, сами дёргаем record-info и обновляем историю.
+let pollerRunning = false;
+setInterval(async () => {
+  if (pollerRunning) return;
+  pollerRunning = true;
+  try {
+    const tasks = persistDb.listRunningTryons({ limit: 8 });
+    for (const t of tasks) {
+      // не долбим свежие задачи
+      const ageMs = Date.now() - new Date(t.createdAt || Date.now()).getTime();
+      if (ageMs < 12000) continue;
+      try {
+        const st = await nanoBananaClient.getTaskStatus(t.taskId);
+        if (st.successFlag === 1 && st.resultUrl) {
+          const row = persistDb.updateTryonByTaskId(t.taskId, {
+            status: 'success',
+            resultImages: [st.resultUrl],
+            error: null
+          });
+          if (row) {
+            sessionStore.appendGeneratedImages(row.telegramUserId, row.sessionId, [st.resultUrl]);
+            const chatId = persistDb.getChatIdByTelegramUserId(row.telegramUserId);
+            const bot = getBot && getBot();
+            if (chatId && bot) {
+              bot.sendMessage(chatId, 'Примерка готова!').catch(() => {});
+              bot.sendPhoto(chatId, st.resultUrl, {
+                caption: (row.productTitle ? `Товар: ${row.productTitle}\n` : '') + 'Нажмите «Открыть мини-приложение», чтобы посмотреть историю примерок.'
+              }).catch(() => {});
+            }
+          }
+        } else if (st.successFlag === 2 || st.successFlag === 3) {
+          persistDb.updateTryonByTaskId(t.taskId, {
+            status: 'error',
+            error: st.errorMessage || 'Generation failed'
+          });
+        }
+      } catch (e) {
+        // если record-info недоступен — подождём следующий тик
+      }
+    }
+  } catch (_) {
+  } finally {
+    pollerRunning = false;
+  }
+}, 15000);
+
 // Telegram webhook (чтобы не было 409: только один приём обновлений вместо polling)
 app.post('/telegram-webhook', (req, res) => {
   res.status(200).send();
