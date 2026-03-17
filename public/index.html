@@ -173,6 +173,17 @@
       }
       .tryon-pill.ok { border-color: rgba(34,197,94,0.4); }
       .tryon-pill.err { border-color: rgba(239,68,68,0.5); }
+      .tryon-actions { display: flex; gap: 8px; align-items: center; flex: none; }
+      .tryon-btn {
+        font-size: 12px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(163, 230, 53, 0.55);
+        background: rgba(16, 185, 129, 0.12);
+        color: #d9f99d;
+        cursor: pointer;
+      }
+      .tryon-btn:hover { filter: brightness(1.08); }
 
       label {
         font-size: 13px;
@@ -675,29 +686,15 @@
         <div class="card step-card">
           <div class="step-label">Шаг 2</div>
           <div class="section-title">Товар для примерки</div>
-          <div class="hint-block">
-            Со смартфона скачать фото из приложения WB нельзя — используйте вкладку «Карточка WB» и вставьте ссылку на товар (Поделиться → Копировать). Фото подгрузятся с нашего сервера автоматически.
-          </div>
-          <div class="tabs" role="tablist">
-            <button type="button" class="tab active" id="tab-manual" role="tab" aria-selected="true">Загрузить вручную</button>
-            <button type="button" class="tab" id="tab-card" role="tab" aria-selected="false">Карточка WB</button>
-          </div>
-          <div id="panel-manual" class="tab-panel" role="tabpanel">
-            <div class="section-caption">До 3 фото товара: кнопкой или ссылками ниже.</div>
-            <input id="product-image-files" type="file" accept="image/*" multiple class="input-file-hidden" />
-            <label for="product-image-files" class="btn btn-upload btn-full">
-              <span class="btn-upload-icon">🖼</span>
-              <span>Добавить фото товара (макс. 3)</span>
-            </label>
-            <div class="product-previews" id="product-image-previews"></div>
-            <label for="product-image-urls" class="label-secondary">Или ссылки на изображения (каждая с новой строки)</label>
-            <textarea id="product-image-urls" placeholder="https://..."></textarea>
-          </div>
-          <div id="panel-card" class="tab-panel hidden" role="tabpanel">
-            <div class="section-caption">Ссылка на карточку товара Wildberries.</div>
-            <input id="product-url" type="text" placeholder="https://www.wildberries.ru/catalog/..." />
-            <div class="status" id="product-status"></div>
-          </div>
+          <div class="section-caption">Добавьте фото товара (до 3) с устройства или вставьте ссылки на изображения.</div>
+          <input id="product-image-files" type="file" accept="image/*" multiple class="input-file-hidden" />
+          <label for="product-image-files" class="btn btn-upload btn-full">
+            <span class="btn-upload-icon">🖼</span>
+            <span>Добавить фото товара (макс. 3)</span>
+          </label>
+          <div class="product-previews" id="product-image-previews"></div>
+          <label for="product-image-urls" class="label-secondary">Или ссылки на изображения (каждая с новой строки)</label>
+          <textarea id="product-image-urls" placeholder="https://..."></textarea>
           <div class="screen-nav">
             <button type="button" class="btn btn-back btn-primary" id="btn-back-2">Назад</button>
             <button type="button" class="btn btn-primary btn-full btn-next" id="btn-next-2">Далее</button>
@@ -789,13 +786,7 @@
       const avatarFilesHint = document.getElementById('avatar-files-hint');
       const avatarStatus = document.getElementById('avatar-status');
 
-      const productUrlInput = document.getElementById('product-url');
       const productImageUrlsInput = document.getElementById('product-image-urls');
-      const productStatus = document.getElementById('product-status');
-      const tabCard = document.getElementById('tab-card');
-      const tabManual = document.getElementById('tab-manual');
-      const panelCard = document.getElementById('panel-card');
-      const panelManual = document.getElementById('panel-manual');
       const manualStatus = document.getElementById('manual-status');
       const stepperEl = document.getElementById('stepper');
       const btnNext1 = document.getElementById('btn-next-1');
@@ -834,26 +825,8 @@
       const manualProductDataUrls = [];
       const PRODUCT_IMAGE_MAX_FILES = 3;
 
-      tabManual.addEventListener('click', () => {
-        productMode = 'manual';
-        productCardReady = false;
-        tabManual.classList.add('active');
-        tabManual.setAttribute('aria-selected', 'true');
-        tabCard.classList.remove('active');
-        tabCard.setAttribute('aria-selected', 'false');
-        panelManual.classList.remove('hidden');
-        panelCard.classList.add('hidden');
-      });
-      tabCard.addEventListener('click', () => {
-        productMode = 'card';
-        productCardReady = false;
-        tabCard.classList.add('active');
-        tabCard.setAttribute('aria-selected', 'true');
-        tabManual.classList.remove('active');
-        tabManual.setAttribute('aria-selected', 'false');
-        panelCard.classList.remove('hidden');
-        panelManual.classList.add('hidden');
-      });
+      // Marketplace card mode temporarily disabled: manual upload only
+      productMode = 'manual';
 
       const productImageFilesInput = document.getElementById('product-image-files');
       const productImagePreviews = document.getElementById('product-image-previews');
@@ -881,13 +854,7 @@
         e.target.value = '';
       });
 
-      /** Из вставленного текста оставить только URL карточки Wildberries. */
-      function extractProductUrl(text) {
-        if (!text || typeof text !== 'string') return '';
-        const s = text.trim();
-        const wb = s.match(/https?:\/\/(?:www\.)?(?:wildberries\.ru\/catalog\/\d+[^\s]*)/i);
-        return wb ? wb[0].replace(/[\s,]+$/, '') : '';
-      }
+      // extractProductUrl removed (marketplace mode disabled)
 
       const photoshootStatus = document.getElementById('photoshoot-status');
       const photoshootGallery = document.getElementById('photoshoot-gallery');
@@ -960,6 +927,14 @@
           showScreen(3);
         });
       }
+
+      // Hidden input to add extra item from history
+      const addItemInput = document.createElement('input');
+      addItemInput.type = 'file';
+      addItemInput.accept = 'image/*';
+      addItemInput.multiple = true;
+      addItemInput.style.display = 'none';
+      document.body.appendChild(addItemInput);
 
       /** Сильное сжатие: один запрос — одно фото, чтобы обойти 413 на Render. */
       const AVATAR_MAX_PX = 400;
@@ -1067,55 +1042,14 @@
 
       btnBack2.addEventListener('click', () => showScreen(1));
       btnNext2.addEventListener('click', async () => {
-        if (productMode === 'card') {
-          const raw = productUrlInput.value.trim();
-          const url = extractProductUrl(raw) || raw;
-          if (!url) {
-            productStatus.textContent = 'Вставьте ссылку на карточку WB (Поделиться → Копировать).';
-            productStatus.className = 'status status-error';
-            return;
-          }
-          if (url !== raw) productUrlInput.value = url;
-
-          // Если карточка ещё не разобрана или поменялась — загружаем и ОСТАЁМСЯ на шаге 2
-          if (!productCardReady || !lastAnalysis || !lastAnalysis.images || !lastAnalysis.images.length || lastAnalysis.productUrl !== url) {
-            productStatus.textContent = 'Загружаем карточку...';
-            productStatus.className = 'status';
-            try {
-              const telegramUserId = getTelegramUserId();
-              const data = await callApi('/api/product/analyze', {
-                body: { telegramUserId, productUrl: url }
-              });
-              lastAnalysis = data;
-              if (!lastAnalysis || !lastAnalysis.images || !lastAnalysis.images.length) {
-                productStatus.textContent =
-                  data?.imageFetchHint ||
-                  'Не удалось автоматически загрузить фото с WB. Вставьте ссылки на фото вручную или попробуйте другой товар.';
-                productStatus.className = 'status status-error';
-                return;
-              }
-              productCardReady = true;
-              productStatus.textContent = 'Фото товара загружены. Можно перейти к шагу 3 и запустить генерацию.';
-              productStatus.className = 'status status-ok';
-              return; // не переходим автоматически на шаг 3
-            } catch (e) {
-              productStatus.textContent =
-                e?.message || 'Не удалось загрузить карточку. Попробуйте ещё раз или воспользуйтесь вкладкой «Загрузить вручную».';
-              productStatus.className = 'status status-error';
-              return;
-            }
-          }
-          // карточка уже успешно загружена ранее и не менялась → теперь можно переходить на шаг 3
+        const fromFiles = manualProductDataUrls.length;
+        const fromUrls = parseManualImageUrls().filter(looksLikeImageUrl).length;
+        if (fromFiles > 0 || fromUrls > 0) {
+          manualImagesValid = true;
         } else {
-          const fromFiles = manualProductDataUrls.length;
-          const fromUrls = parseManualImageUrls().filter(looksLikeImageUrl).length;
-          if (fromFiles > 0 || fromUrls > 0) {
-            manualImagesValid = true;
-          } else {
-            manualStatus.textContent = 'Добавьте хотя бы одно фото файлами или ссылками.';
-            manualStatus.className = 'status status-error';
-            return;
-          }
+          manualStatus.textContent = 'Добавьте хотя бы одно фото товара файлами или ссылками.';
+          manualStatus.className = 'status status-error';
+          return;
         }
         showScreen(3);
       });
@@ -1144,41 +1078,16 @@
           let images = [];
           let title = null;
 
-          if (productMode === 'manual') {
-            const fromFiles = manualProductDataUrls.slice(0, 3);
-            const fromUrls = parseManualImageUrls().filter(looksLikeImageUrl).slice(0, 5 - fromFiles.length);
-            images = [...fromFiles, ...fromUrls].slice(0, 5);
-            if (images.length === 0) {
-              photoshootStatus.textContent = 'Вернитесь на шаг 2 и добавьте фото товара (кнопкой или ссылками).';
-              photoshootStatus.classList.add('status-error');
-              return;
-            }
-            productUrl = images[0] || '';
-            title = 'Фото вручную';
-          } else {
-            const raw = productUrlInput.value.trim();
-            productUrl = extractProductUrl(raw) || raw;
-            if (!productUrl) {
-              photoshootStatus.textContent = 'Вернитесь на шаг 2 и вставьте ссылку на карточку WB или добавьте фото вручную.';
-              photoshootStatus.classList.add('status-error');
-              return;
-            }
-            if (productUrl !== raw) productUrlInput.value = productUrl;
-            if (!lastAnalysis || !lastAnalysis.images?.length) {
-              photoshootStatus.textContent = 'Загружаем карточку WB...';
-              try {
-                const data = await callApi('/api/product/analyze', {
-                  body: { telegramUserId, productUrl }
-                });
-                lastAnalysis = data;
-              } catch (_) {}
-            }
-            images =
-              lastAnalysis && lastAnalysis.images && lastAnalysis.images.length
-                ? lastAnalysis.images
-                : [productUrl];
-            title = lastAnalysis?.title || null;
+          const fromFiles = manualProductDataUrls.slice(0, 3);
+          const fromUrls = parseManualImageUrls().filter(looksLikeImageUrl).slice(0, 5 - fromFiles.length);
+          images = [...fromFiles, ...fromUrls].slice(0, 5);
+          if (images.length === 0) {
+            photoshootStatus.textContent = 'Вернитесь на шаг 2 и добавьте фото товара (кнопкой или ссылками).';
+            photoshootStatus.classList.add('status-error');
+            return;
           }
+          productUrl = images[0] || '';
+          title = 'Фото вручную';
 
           const data = await callApi('/api/photoshoot', {
             body: {
@@ -1210,64 +1119,148 @@
             method: 'GET'
           });
 
-          sessionsList.innerHTML = '';
+          const list = data.tryons || [];
 
-          (data.tryons || []).forEach((t) => {
-            const root = document.createElement('div');
-            root.className = 'tryon-item';
+          const render = (container) => {
+            if (!container) return;
+            container.innerHTML = '';
+            list.forEach((t) => {
+              const root = document.createElement('div');
+              root.className = 'tryon-item';
 
-            const meta = document.createElement('div');
-            meta.className = 'tryon-meta';
+              const meta = document.createElement('div');
+              meta.className = 'tryon-meta';
 
-            const title = document.createElement('div');
-            title.className = 'tryon-title';
-            title.textContent = t.productTitle || t.productUrl || 'Примерка';
-            meta.appendChild(title);
+              const title = document.createElement('div');
+              title.className = 'tryon-title';
+              title.textContent = t.productTitle || t.productUrl || 'Примерка';
+              meta.appendChild(title);
 
-            const sub = document.createElement('div');
-            sub.className = 'tryon-sub';
-            sub.textContent = new Date(t.createdAt || Date.now()).toLocaleString();
-            meta.appendChild(sub);
+              const sub = document.createElement('div');
+              sub.className = 'tryon-sub';
+              sub.textContent = new Date(t.createdAt || Date.now()).toLocaleString();
+              meta.appendChild(sub);
 
-            root.appendChild(meta);
+              const thumbs = document.createElement('div');
+              thumbs.style.display = 'flex';
+              thumbs.style.gap = '6px';
+              thumbs.style.marginTop = '4px';
 
-            const pill = document.createElement('div');
-            pill.className = 'tryon-pill';
-            if (t.status === 'success') {
-              pill.classList.add('ok');
-              pill.textContent = 'Готово';
-            } else if (t.status === 'error') {
-              pill.classList.add('err');
-              pill.textContent = 'Ошибка';
-            } else {
-              pill.textContent = 'В работе';
-            }
-            root.appendChild(pill);
-
-            sessionsList.appendChild(root);
-
-            if (t.status !== 'success' && t.status !== 'error') {
-              const wrap = document.createElement('div');
-              wrap.className = 'progress-wrap';
-              const bar = document.createElement('div');
-              bar.className = 'progress-bar';
-              wrap.appendChild(bar);
-              sessionsList.appendChild(wrap);
-            }
-
-            root.addEventListener('click', () => {
-              const img = (t.resultImages && t.resultImages[0]) || null;
-              if (img) openImageModal(img);
-              else if (t.error) {
-                photoshootStatus.textContent = t.error;
-                photoshootStatus.className = 'status status-error';
+              const prod = (t.productImages && t.productImages[0]) || null;
+              if (prod) {
+                const img = document.createElement('img');
+                img.src = prod;
+                img.alt = 'Товар';
+                img.style.width = '34px';
+                img.style.height = '34px';
+                img.style.borderRadius = '6px';
+                img.style.objectFit = 'cover';
+                thumbs.appendChild(img);
               }
+              const res = (t.resultImages && t.resultImages[0]) || null;
+              if (res) {
+                const img = document.createElement('img');
+                img.src = res;
+                img.alt = 'Результат';
+                img.style.width = '34px';
+                img.style.height = '34px';
+                img.style.borderRadius = '6px';
+                img.style.objectFit = 'cover';
+                thumbs.appendChild(img);
+              }
+              if (thumbs.children.length) meta.appendChild(thumbs);
+
+              root.appendChild(meta);
+
+              const actions = document.createElement('div');
+              actions.className = 'tryon-actions';
+
+              const pill = document.createElement('div');
+              pill.className = 'tryon-pill';
+              if (t.status === 'success') {
+                pill.classList.add('ok');
+                pill.textContent = 'Готово';
+              } else if (t.status === 'error') {
+                pill.classList.add('err');
+                pill.textContent = 'Ошибка';
+              } else {
+                pill.textContent = 'В работе';
+              }
+              actions.appendChild(pill);
+
+              const btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'tryon-btn';
+              btn.textContent = 'Добавить вещь';
+              btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                addItemInput.value = '';
+                addItemInput.dataset.tryonId = t.id;
+                addItemInput.click();
+              });
+              actions.appendChild(btn);
+
+              root.appendChild(actions);
+
+              container.appendChild(root);
+
+              if (t.status !== 'success' && t.status !== 'error') {
+                const wrap = document.createElement('div');
+                wrap.className = 'progress-wrap';
+                const bar = document.createElement('div');
+                bar.className = 'progress-bar';
+                wrap.appendChild(bar);
+                container.appendChild(wrap);
+              }
+
+              root.addEventListener('click', () => {
+                const img = (t.resultImages && t.resultImages[0]) || null;
+                if (img) openImageModal(img);
+                else if (t.error) {
+                  photoshootStatus.textContent = t.error;
+                  photoshootStatus.className = 'status status-error';
+                }
+              });
             });
-          });
+          };
+
+          render(sessionsList);
+          render(historyList);
         } catch (err) {
           console.error('Failed to refresh sessions', err);
         }
       }
+
+      addItemInput.addEventListener('change', async () => {
+        const telegramUserId = getTelegramUserId();
+        const tryonId = addItemInput.dataset.tryonId;
+        const files = Array.from(addItemInput.files || []).slice(0, 3);
+        if (!tryonId || !files.length) return;
+        photoshootStatus.textContent = 'Добавляем вещь в существующую фотосессию...';
+        photoshootStatus.className = 'status';
+        try {
+          const dataUrls = [];
+          for (const file of files) {
+            const dataUrl = await new Promise((res, rej) => {
+              const r = new FileReader();
+              r.onload = () => res(r.result);
+              r.onerror = rej;
+              r.readAsDataURL(file);
+            });
+            if (typeof dataUrl === 'string') dataUrls.push(dataUrl);
+          }
+          if (!dataUrls.length) throw new Error('Не удалось прочитать файлы.');
+          await callApi(`/api/tryon/${tryonId}/add-item`, {
+            body: { telegramUserId, images: dataUrls }
+          });
+          photoshootStatus.textContent = 'Вещь добавлена. Задача появится в истории.';
+          photoshootStatus.className = 'status status-ok';
+          await refreshSessions();
+        } catch (e) {
+          photoshootStatus.textContent = e?.message || 'Не удалось добавить вещь.';
+          photoshootStatus.className = 'status status-error';
+        }
+      });
 
       btnRefreshSessions.addEventListener('click', () => {
         refreshSessions();

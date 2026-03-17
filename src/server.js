@@ -331,6 +331,47 @@ app.get('/api/tryon/:id', (req, res) => {
   }
 });
 
+// Add item to existing session (manual photos only)
+app.post('/api/tryon/:id/add-item', async (req, res) => {
+  try {
+    const base = persistDb.getTryon(req.params.id);
+    if (!base) return res.status(404).json({ error: 'Not found' });
+    const { telegramUserId, images } = req.body || {};
+    if (!telegramUserId || String(telegramUserId) !== String(base.telegramUserId)) {
+      return res.status(400).json({ error: 'telegramUserId mismatch' });
+    }
+    const productImages = Array.isArray(images) ? images : [];
+    if (productImages.length === 0) {
+      return res.status(400).json({ error: 'images[] required' });
+    }
+
+    const appearance = sessionStore.getAppearance(telegramUserId);
+    if (!appearance || !(appearance.referenceImages || []).length) {
+      return res.status(400).json({ error: 'Appearance not created yet' });
+    }
+
+    const enqueue = await nanoBananaClient.enqueueTryOn({
+      appearance,
+      productImages,
+      sessionId: base.sessionId
+    });
+
+    const row = persistDb.createTryon({
+      telegramUserId,
+      sessionId: base.sessionId,
+      productUrl: base.productUrl,
+      productTitle: base.productTitle || 'Добавленная вещь',
+      productImages: productImages.slice(0, 5),
+      taskId: enqueue.taskId,
+      status: 'running'
+    });
+
+    return res.json({ ok: true, tryonId: row.id, status: row.status, sessionId: row.sessionId });
+  } catch (e) {
+    return res.status(500).json({ error: e?.message || 'Failed to add item' });
+  }
+});
+
 /**
  * API: get current sessions for a user
  */
