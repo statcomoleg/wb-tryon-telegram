@@ -336,6 +336,7 @@ app.get('/api/debug/telegram-webhook-info', async (req, res) => {
 app.post('/api/debug/telegram-set-webhook', async (req, res) => {
   if (!debugAllowed(req)) return res.status(404).send('Not found');
   try {
+    const axios = require('axios');
     const { getBot, fetchTelegramWebhookInfo } = require('./telegramBot');
     const bot = getBot && getBot();
     const baseUrl = (process.env.PUBLIC_APP_URL || process.env.WEBAPP_URL || '')
@@ -343,11 +344,35 @@ app.post('/api/debug/telegram-set-webhook', async (req, res) => {
       .replace(/\/+$/, '');
     const webhookUrl = baseUrl ? `${baseUrl}/telegram-webhook` : null;
     if (!webhookUrl) return res.status(400).json({ ok: false, error: 'No baseUrl (set PUBLIC_APP_URL or WEBAPP_URL)' });
-    if (!bot) return res.status(500).json({ ok: false, error: 'Bot not ready' });
+    const token = String(process.env.TELEGRAM_BOT_TOKEN || '').trim();
+    if (!token) return res.status(500).json({ ok: false, error: 'TELEGRAM_BOT_TOKEN not set on server' });
 
-    const setRes = await bot.setWebHook(webhookUrl);
+    // 1) Try via Telegram HTTP API (source of truth)
+    const tgSetUrl = `https://api.telegram.org/bot${token}/setWebhook`;
+    const tgResp = await axios.post(
+      tgSetUrl,
+      { url: webhookUrl, drop_pending_updates: false },
+      { timeout: 20000 }
+    );
+
+    // 2) Also try via library if bot exists (not required)
+    let libResult = null;
+    if (bot && typeof bot.setWebHook === 'function') {
+      try {
+        libResult = await bot.setWebHook(webhookUrl);
+      } catch (e) {
+        libResult = { ok: false, error: e?.message || String(e) };
+      }
+    }
+
     const info = fetchTelegramWebhookInfo ? await fetchTelegramWebhookInfo() : null;
-    return res.json({ ok: true, webhookUrl, setResult: setRes, webhookInfo: info });
+    return res.json({
+      ok: true,
+      webhookUrl,
+      telegramSetWebhook: tgResp.data,
+      libSetWebhook: libResult,
+      webhookInfo: info
+    });
   } catch (e) {
     return res.status(500).json({
       ok: false,
@@ -355,6 +380,16 @@ app.post('/api/debug/telegram-set-webhook', async (req, res) => {
       details: e?.response?.body || e?.response?.data || null
     });
   }
+});
+
+app.get('/api/debug/runtime-env', (req, res) => {
+  if (!debugAllowed(req)) return res.status(404).send('Not found');
+  res.json({
+    TELEGRAM_USE_WEBHOOK: process.env.TELEGRAM_USE_WEBHOOK,
+    WEBAPP_URL: process.env.WEBAPP_URL,
+    PUBLIC_APP_URL: process.env.PUBLIC_APP_URL,
+    hasBotToken: !!String(process.env.TELEGRAM_BOT_TOKEN || '').trim()
+  });
 });
 
 /**
