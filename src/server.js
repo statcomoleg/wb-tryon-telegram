@@ -352,6 +352,37 @@ app.get('/api/debug/telegram-last-updates', (req, res) => {
   res.json({ count: lastTelegramUpdates.length, updates: lastTelegramUpdates });
 });
 
+app.get('/api/debug/tryons', (req, res) => {
+  if (!debugAllowed(req)) return res.status(404).send('Not found');
+  const telegramUserId = String(req.query.telegramUserId || '');
+  const limit = req.query.limit ? Number(req.query.limit) : 20;
+  if (!telegramUserId) return res.status(400).json({ ok: false, error: 'telegramUserId required' });
+  const items = persistDb.listTryons(telegramUserId, { limit });
+  res.json({ ok: true, telegramUserId, count: items.length, tryons: items });
+});
+
+app.post('/api/debug/resend-latest-success', async (req, res) => {
+  if (!debugAllowed(req)) return res.status(404).send('Not found');
+  try {
+    const telegramUserId = String(req.body?.telegramUserId || req.query.telegramUserId || '');
+    if (!telegramUserId) return res.status(400).json({ ok: false, error: 'telegramUserId required' });
+
+    const items = persistDb.listTryons(telegramUserId, { limit: 50 });
+    const latest = items.find((t) => t.status === 'success' && Array.isArray(t.resultImages) && t.resultImages[0]);
+    if (!latest) return res.status(404).json({ ok: false, error: 'No successful tryons found for this user' });
+
+    await notifyBotTryonSuccess({
+      telegramUserId,
+      productTitle: latest.productTitle,
+      resultUrl: latest.resultImages[0],
+      tryonId: latest.id
+    });
+    return res.json({ ok: true, tryonId: latest.id, resultUrl: latest.resultImages[0] });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e?.message || String(e) });
+  }
+});
+
 app.post('/api/debug/telegram-set-webhook', async (req, res) => {
   if (!debugAllowed(req)) return res.status(404).send('Not found');
   try {
