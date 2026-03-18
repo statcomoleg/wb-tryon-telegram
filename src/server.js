@@ -16,6 +16,7 @@ const { analyzeProductUrl } = require('./services/productAnalyzer');
 const { sessionStore } = require('./services/sessionStore');
 const { tempImageStore } = require('./services/tempImageStore');
 const { persistDb } = require('./services/persistDb');
+const { resultImageStore } = require('./services/resultImageStore');
 const { getBot } = require('./telegramBot');
 
 const app = express();
@@ -38,6 +39,70 @@ const PUBLIC_APP_URL = (process.env.PUBLIC_APP_URL || process.env.WEBAPP_URL || 
   .replace(/\/webapp\/?$/, '')
   .replace(/\/+$/, '');
 
+app.get('/api/result-image/:tryonId', (req, res) => {
+  try {
+    const { tryonId } = req.params || {};
+    if (!tryonId) return res.status(400).send('Bad request');
+    if (!resultImageStore.exists(tryonId)) return res.status(404).send('Not found');
+    const buf = resultImageStore.readBuffer(tryonId);
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(buf);
+  } catch (e) {
+    res.status(500).send('Error');
+  }
+});
+
+async function notifyBotTryonSuccess({ telegramUserId, productTitle, resultUrl, tryonId }) {
+  const chatId = persistDb.getChatIdByTelegramUserId(telegramUserId);
+  const bot = getBot && getBot();
+  if (!chatId || !bot) return;
+
+  try {
+    await bot.sendMessage(chatId, 'Примерка готова!');
+  } catch (e) {
+    console.warn('[bot] sendMessage failed:', e?.message || e);
+  }
+
+  // Prefer sending as buffer (Telegram часто не может скачать с временных хостингов)
+  if (tryonId && resultImageStore.exists(tryonId)) {
+    try {
+      const buf = resultImageStore.readBuffer(tryonId);
+      await bot.sendPhoto(chatId, buf, {
+        caption:
+          (productTitle ? `Товар: ${productTitle}\n` : '') +
+          'Нажмите «Открыть мини-приложение», чтобы посмотреть историю примерок.'
+      });
+      return;
+    } catch (e) {
+      console.warn('[bot] sendPhoto(buffer) failed:', e?.message || e);
+    }
+  }
+
+  if (resultUrl) {
+    try {
+      await bot.sendPhoto(chatId, resultUrl, {
+        caption:
+          (productTitle ? `Товар: ${productTitle}\n` : '') +
+          'Нажмите «Открыть мини-приложение», чтобы посмотреть историю примерок.'
+      });
+    } catch (e) {
+      console.warn('[bot] sendPhoto(url) failed:', e?.message || e);
+    }
+  }
+}
+
+async function notifyBotTryonError({ telegramUserId, errorText }) {
+  const chatId = persistDb.getChatIdByTelegramUserId(telegramUserId);
+  const bot = getBot && getBot();
+  if (!chatId || !bot) return;
+  try {
+    await bot.sendMessage(chatId, `Примерка не получилась.\n\nПричина: ${errorText || 'ошибка генерации'}`);
+  } catch (e) {
+    console.warn('[bot] sendMessage(error) failed:', e?.message || e);
+  }
+}
+
 app.get('/api/temp-image/:id', (req, res) => {
   const dataUrl = tempImageStore.get(req.params.id);
   if (!dataUrl) {
@@ -57,9 +122,10 @@ app.get('/api/temp-image/:id', (req, res) => {
 });
 
 app.post('/api/nanobanana-callback', (req, res) => {
-  // Must respond fast (<15s). Processing is lightweight (db update + bot notify).
+  // Must respond fast (<15s).
   res.status(200).send();
-  try {
+
+  (async () => {
     const data = req.body?.data || req.body || {};
     const taskId = data?.taskId;
     const successFlag = data?.successFlag;
@@ -69,35 +135,52 @@ app.post('/api/nanobanana-callback', (req, res) => {
     if (!taskId) return;
 
     if (successFlag === 1 && resultImageUrl) {
+      // First: mark success with raw URL to not lose result even if caching fails.
       const row = persistDb.updateTryonByTaskId(taskId, {
         status: 'success',
         resultImages: [resultImageUrl],
         error: null
       });
-      if (row) {
-        sessionStore.appendGeneratedImages(row.telegramUserId, row.sessionId, [resultImageUrl]);
-        const chatId = persistDb.getChatIdByTelegramUserId(row.telegramUserId);
-        const bot = getBot && getBot();
-        if (chatId && bot) {
-          bot.sendMessage(chatId, 'Примерка готова!').catch(() => {});
-          bot.sendPhoto(chatId, resultImageUrl, {
-            caption: (row.productTitle ? `Товар: ${row.productTitle}\n` : '') + 'Нажмите «Открыть мини-приложение», чтобы посмотреть историю примерок.'
-          }).catch(() => {});
+      if (!row) return;
+
+      // Cache result on our server (so Telegram WebView can always load it)
+      let cachedPublicUrl = null;
+      if (PUBLIC_APP_URL) {
+        try {
+          await resultImageStore.saveFromUrl({ tryonId: row.id, url: resultImageUrl });
+          cachedPublicUrl = `${PUBLIC_APP_URL}/api/result-image/${row.id}`;
+          persistDb.updateTryonById(row.id, { resultImages: [cachedPublicUrl] });
+        } catch (e) {
+          console.warn('[result-image] cache failed:', e?.message || e);
         }
       }
+
+      const finalUrl = cachedPublicUrl || resultImageUrl;
+      sessionStore.appendGeneratedImages(row.telegramUserId, row.sessionId, [finalUrl]);
+      await notifyBotTryonSuccess({
+        telegramUserId: row.telegramUserId,
+        productTitle: row.productTitle,
+        resultUrl: finalUrl,
+        tryonId: row.id
+      });
       return;
     }
 
     if (successFlag === 2 || successFlag === 3) {
-      persistDb.updateTryonByTaskId(taskId, {
+      const row = persistDb.updateTryonByTaskId(taskId, {
         status: 'error',
         error: errorMessage || 'Generation failed'
       });
-      return;
+      if (row) {
+        await notifyBotTryonError({
+          telegramUserId: row.telegramUserId,
+          errorText: errorMessage || 'Generation failed'
+        });
+      }
     }
-  } catch (e) {
+  })().catch((e) => {
     console.error('[nanobanana-callback] error:', e?.message || e);
-  }
+  });
 });
 
 // Fallback poller: если callback не пришёл, сами дёргаем record-info и обновляем историю.
@@ -120,21 +203,36 @@ setInterval(async () => {
             error: null
           });
           if (row) {
-            sessionStore.appendGeneratedImages(row.telegramUserId, row.sessionId, [st.resultUrl]);
-            const chatId = persistDb.getChatIdByTelegramUserId(row.telegramUserId);
-            const bot = getBot && getBot();
-            if (chatId && bot) {
-              bot.sendMessage(chatId, 'Примерка готова!').catch(() => {});
-              bot.sendPhoto(chatId, st.resultUrl, {
-                caption: (row.productTitle ? `Товар: ${row.productTitle}\n` : '') + 'Нажмите «Открыть мини-приложение», чтобы посмотреть историю примерок.'
-              }).catch(() => {});
+            let cachedPublicUrl = null;
+            if (PUBLIC_APP_URL) {
+              try {
+                await resultImageStore.saveFromUrl({ tryonId: row.id, url: st.resultUrl });
+                cachedPublicUrl = `${PUBLIC_APP_URL}/api/result-image/${row.id}`;
+                persistDb.updateTryonById(row.id, { resultImages: [cachedPublicUrl] });
+              } catch (e) {
+                console.warn('[result-image] cache failed:', e?.message || e);
+              }
             }
+            const finalUrl = cachedPublicUrl || st.resultUrl;
+            sessionStore.appendGeneratedImages(row.telegramUserId, row.sessionId, [finalUrl]);
+            notifyBotTryonSuccess({
+              telegramUserId: row.telegramUserId,
+              productTitle: row.productTitle,
+              resultUrl: finalUrl,
+              tryonId: row.id
+            }).catch(() => {});
           }
         } else if (st.successFlag === 2 || st.successFlag === 3) {
-          persistDb.updateTryonByTaskId(t.taskId, {
+          const row = persistDb.updateTryonByTaskId(t.taskId, {
             status: 'error',
             error: st.errorMessage || 'Generation failed'
           });
+          if (row) {
+            notifyBotTryonError({
+              telegramUserId: row.telegramUserId,
+              errorText: st.errorMessage || 'Generation failed'
+            }).catch(() => {});
+          }
         }
       } catch (e) {
         // если record-info недоступен — подождём следующий тик
