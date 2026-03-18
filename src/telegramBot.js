@@ -23,6 +23,15 @@ function initBot() {
 
   const bot = botInstance;
 
+  // Helpful diagnostics for Render / multi-instance issues
+  bot.on('polling_error', (err) => {
+    console.error('[telegram] polling_error:', err?.message || err);
+    if (err?.response?.body) console.error('[telegram] polling_error body:', JSON.stringify(err.response.body));
+  });
+  bot.on('webhook_error', (err) => {
+    console.error('[telegram] webhook_error:', err?.message || err);
+  });
+
   bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id;
     const firstName = msg.from?.first_name || '';
@@ -31,6 +40,7 @@ function initBot() {
     // Persist mapping so we can notify user in bot later
     try {
       persistDb.upsertTgUser({ telegramUserId, chatId });
+      console.log('[telegram] /start mapping saved', { telegramUserId, chatId });
     } catch (_) {}
 
     try {

@@ -56,7 +56,14 @@ app.get('/api/result-image/:tryonId', (req, res) => {
 async function notifyBotTryonSuccess({ telegramUserId, productTitle, resultUrl, tryonId }) {
   const chatId = persistDb.getChatIdByTelegramUserId(telegramUserId);
   const bot = getBot && getBot();
-  if (!chatId || !bot) return;
+  if (!chatId) {
+    console.warn('[bot] no chatId for telegramUserId=', telegramUserId, '(send /start in bot chat)');
+    return;
+  }
+  if (!bot) {
+    console.warn('[bot] bot instance is not ready (check TELEGRAM_BOT_TOKEN / webhook/polling)');
+    return;
+  }
 
   try {
     await bot.sendMessage(chatId, 'Примерка готова!');
@@ -95,13 +102,50 @@ async function notifyBotTryonSuccess({ telegramUserId, productTitle, resultUrl, 
 async function notifyBotTryonError({ telegramUserId, errorText }) {
   const chatId = persistDb.getChatIdByTelegramUserId(telegramUserId);
   const bot = getBot && getBot();
-  if (!chatId || !bot) return;
+  if (!chatId) {
+    console.warn('[bot] no chatId for telegramUserId=', telegramUserId, '(send /start in bot chat)');
+    return;
+  }
+  if (!bot) {
+    console.warn('[bot] bot instance is not ready (check TELEGRAM_BOT_TOKEN / webhook/polling)');
+    return;
+  }
   try {
     await bot.sendMessage(chatId, `Примерка не получилась.\n\nПричина: ${errorText || 'ошибка генерации'}`);
   } catch (e) {
     console.warn('[bot] sendMessage(error) failed:', e?.message || e);
   }
 }
+
+// Debug endpoints (guarded by DEBUG_TOKEN)
+function debugAllowed(req) {
+  const token = (process.env.DEBUG_TOKEN || '').trim();
+  if (!token) return false;
+  const got = String(req.query.debugToken || req.headers['x-debug-token'] || '').trim();
+  return got && got === token;
+}
+
+app.get('/api/debug/tg-user/:telegramUserId', (req, res) => {
+  if (!debugAllowed(req)) return res.status(404).send('Not found');
+  const telegramUserId = String(req.params.telegramUserId || '');
+  const chatId = persistDb.getChatIdByTelegramUserId(telegramUserId);
+  res.json({ telegramUserId, hasChatId: !!chatId, chatId: chatId || null, botReady: !!(getBot && getBot()) });
+});
+
+app.post('/api/debug/bot-send', async (req, res) => {
+  if (!debugAllowed(req)) return res.status(404).send('Not found');
+  const { telegramUserId, text } = req.body || {};
+  const chatId = persistDb.getChatIdByTelegramUserId(String(telegramUserId || ''));
+  const bot = getBot && getBot();
+  if (!chatId) return res.status(400).json({ ok: false, error: 'No chatId for this telegramUserId (send /start)' });
+  if (!bot) return res.status(500).json({ ok: false, error: 'Bot is not ready (token/webhook/polling)' });
+  try {
+    await bot.sendMessage(chatId, String(text || 'Тест: бот может отправлять сообщения.'));
+    return res.json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e?.message || String(e) });
+  }
+});
 
 app.get('/api/temp-image/:id', (req, res) => {
   const dataUrl = tempImageStore.get(req.params.id);
