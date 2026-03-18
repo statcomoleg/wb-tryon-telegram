@@ -289,6 +289,14 @@ setInterval(async () => {
 }, 15000);
 
 // Telegram webhook (чтобы не было 409: только один приём обновлений вместо polling)
+const lastTelegramUpdates = [];
+function rememberTelegramUpdate(entry) {
+  try {
+    lastTelegramUpdates.unshift({ ...entry, at: new Date().toISOString() });
+    if (lastTelegramUpdates.length > 20) lastTelegramUpdates.length = 20;
+  } catch (_) {}
+}
+
 app.post('/telegram-webhook', (req, res) => {
   res.status(200).send();
   try {
@@ -300,6 +308,12 @@ app.post('/telegram-webhook', (req, res) => {
     const text = upd.message?.text || upd.edited_message?.text || null;
     if (from?.id || chat?.id || text) {
       console.log('[telegram-webhook] update', {
+        update_id: upd.update_id,
+        from_id: from?.id || null,
+        chat_id: chat?.id || null,
+        text: text || null
+      });
+      rememberTelegramUpdate({
         update_id: upd.update_id,
         from_id: from?.id || null,
         chat_id: chat?.id || null,
@@ -331,6 +345,11 @@ app.get('/api/debug/telegram-webhook-info', async (req, res) => {
   } catch (e) {
     res.status(500).json({ ok: false, error: e?.message || String(e) });
   }
+});
+
+app.get('/api/debug/telegram-last-updates', (req, res) => {
+  if (!debugAllowed(req)) return res.status(404).send('Not found');
+  res.json({ count: lastTelegramUpdates.length, updates: lastTelegramUpdates });
 });
 
 app.post('/api/debug/telegram-set-webhook', async (req, res) => {
