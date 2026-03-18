@@ -292,10 +292,44 @@ setInterval(async () => {
 app.post('/telegram-webhook', (req, res) => {
   res.status(200).send();
   try {
+    // Minimal log so we can verify Telegram reaches us
+    const upd = req.body || {};
+    const msg = upd.message || upd.edited_message || upd.callback_query?.message || null;
+    const from = upd.message?.from || upd.edited_message?.from || upd.callback_query?.from || null;
+    const chat = msg?.chat || null;
+    const text = upd.message?.text || upd.edited_message?.text || null;
+    if (from?.id || chat?.id || text) {
+      console.log('[telegram-webhook] update', {
+        update_id: upd.update_id,
+        from_id: from?.id || null,
+        chat_id: chat?.id || null,
+        text: text || null
+      });
+    }
+    // Extra safety: if /start comes through webhook, persist mapping even if handler isn't triggered for some reason
+    if (text === '/start' && from?.id && chat?.id) {
+      try {
+        persistDb.upsertTgUser({ telegramUserId: String(from.id), chatId: chat.id });
+        console.log('[telegram-webhook] /start mapping saved', { telegramUserId: String(from.id), chatId: chat.id });
+      } catch (_) {}
+    }
     const { processUpdate } = require('./telegramBot');
     if (processUpdate && req.body) processUpdate(req.body);
   } catch (err) {
     console.error('Telegram webhook process error:', err && err.message);
+  }
+});
+
+// Debug: show Telegram webhook status from Telegram API (guarded by DEBUG_TOKEN)
+app.get('/api/debug/telegram-webhook-info', async (req, res) => {
+  if (!debugAllowed(req)) return res.status(404).send('Not found');
+  try {
+    const { fetchTelegramWebhookInfo, fetchTelegramMe } = require('./telegramBot');
+    const me = fetchTelegramMe ? await fetchTelegramMe() : null;
+    const info = fetchTelegramWebhookInfo ? await fetchTelegramWebhookInfo() : null;
+    res.json({ me, webhookInfo: info });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || String(e) });
   }
 });
 

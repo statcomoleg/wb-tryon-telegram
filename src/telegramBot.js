@@ -1,4 +1,5 @@
 const TelegramBot = require('node-telegram-bot-api');
+const axios = require('axios');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://example.com/webapp';
@@ -6,6 +7,28 @@ const USE_WEBHOOK = process.env.TELEGRAM_USE_WEBHOOK === 'true';
 const { persistDb } = require('./services/persistDb');
 
 let botInstance = null;
+
+async function fetchTelegramWebhookInfo() {
+  if (!BOT_TOKEN) return { ok: false, error: 'TELEGRAM_BOT_TOKEN is not set' };
+  try {
+    const url = `https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`;
+    const resp = await axios.get(url, { timeout: 15000 });
+    return resp.data;
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
+async function fetchTelegramMe() {
+  if (!BOT_TOKEN) return { ok: false, error: 'TELEGRAM_BOT_TOKEN is not set' };
+  try {
+    const url = `https://api.telegram.org/bot${BOT_TOKEN}/getMe`;
+    const resp = await axios.get(url, { timeout: 15000 });
+    return resp.data;
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
 
 function initBot() {
   if (!BOT_TOKEN) {
@@ -93,6 +116,8 @@ function processUpdate(update) {
 module.exports = {
   initBot,
   getBot: () => botInstance,
-  processUpdate
+  processUpdate,
+  fetchTelegramWebhookInfo,
+  fetchTelegramMe
 };
 
