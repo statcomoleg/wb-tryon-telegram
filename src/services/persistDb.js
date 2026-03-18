@@ -119,6 +119,22 @@ function listRunningTryons({ limit = 20 } = {}) {
     .slice(0, Math.max(1, Math.min(200, Number(limit) || 20)));
 }
 
+function listAllTryons({ limit = 50 } = {}) {
+  const db = load();
+  return db.tryons.slice(0, Math.max(1, Math.min(500, Number(limit) || 50)));
+}
+
+function listTgUsers({ limit = 200 } = {}) {
+  const db = load();
+  const rows = Object.entries(db.tgUsers || {}).map(([telegramUserId, v]) => ({
+    telegramUserId: String(telegramUserId),
+    chatId: v?.chatId ?? null,
+    updatedAt: v?.updatedAt ?? null
+  }));
+  rows.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  return rows.slice(0, Math.max(1, Math.min(1000, Number(limit) || 200)));
+}
+
 const persistDb = {
   upsertTgUser,
   getChatIdByTelegramUserId,
@@ -127,7 +143,9 @@ const persistDb = {
   updateTryonById,
   listTryons,
   getTryon,
-  listRunningTryons
+  listRunningTryons,
+  listAllTryons,
+  listTgUsers
 };
 
 module.exports = { persistDb };

@@ -383,6 +383,20 @@ app.post('/api/debug/resend-latest-success', async (req, res) => {
   }
 });
 
+app.get('/api/debug/all-tryons', (req, res) => {
+  if (!debugAllowed(req)) return res.status(404).send('Not found');
+  const limit = req.query.limit ? Number(req.query.limit) : 50;
+  const items = persistDb.listAllTryons({ limit });
+  res.json({ ok: true, count: items.length, tryons: items });
+});
+
+app.get('/api/debug/tg-users', (req, res) => {
+  if (!debugAllowed(req)) return res.status(404).send('Not found');
+  const limit = req.query.limit ? Number(req.query.limit) : 200;
+  const users = persistDb.listTgUsers({ limit });
+  res.json({ ok: true, count: users.length, users });
+});
+
 app.post('/api/debug/telegram-set-webhook', async (req, res) => {
   if (!debugAllowed(req)) return res.status(404).send('Not found');
   try {
