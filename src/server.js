@@ -333,6 +333,30 @@ app.get('/api/debug/telegram-webhook-info', async (req, res) => {
   }
 });
 
+app.post('/api/debug/telegram-set-webhook', async (req, res) => {
+  if (!debugAllowed(req)) return res.status(404).send('Not found');
+  try {
+    const { getBot, fetchTelegramWebhookInfo } = require('./telegramBot');
+    const bot = getBot && getBot();
+    const baseUrl = (process.env.PUBLIC_APP_URL || process.env.WEBAPP_URL || '')
+      .replace(/\/webapp\/?$/, '')
+      .replace(/\/+$/, '');
+    const webhookUrl = baseUrl ? `${baseUrl}/telegram-webhook` : null;
+    if (!webhookUrl) return res.status(400).json({ ok: false, error: 'No baseUrl (set PUBLIC_APP_URL or WEBAPP_URL)' });
+    if (!bot) return res.status(500).json({ ok: false, error: 'Bot not ready' });
+
+    const setRes = await bot.setWebHook(webhookUrl);
+    const info = fetchTelegramWebhookInfo ? await fetchTelegramWebhookInfo() : null;
+    return res.json({ ok: true, webhookUrl, setResult: setRes, webhookInfo: info });
+  } catch (e) {
+    return res.status(500).json({
+      ok: false,
+      error: e?.message || String(e),
+      details: e?.response?.body || e?.response?.data || null
+    });
+  }
+});
+
 /**
  * Тест Nano Banana Pro: один запрос на генерацию (яблоко на белом фоне).
  * Откройте в браузере: https://ваш-сервис.onrender.com/api/test-nano-banana
